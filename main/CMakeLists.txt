@@ -1,0 +1,27 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "client_task.c"
+        "server_task.c"
+        "wifi.c"
+        "led.c"
+        "rtc_pcf8563.c"
+        "fram_fm24cl64b.c"
+        "rtc_fram_manager.c"
+        "Solar.c"
+        "Http_server.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        esp_driver_spi
+        esp_wifi
+        esp_netif
+        lwip
+        nvs_flash
+        driver
+        esp_event
+        bacnet
+        esp_modem
+        esp_http_server
+        json
+)
