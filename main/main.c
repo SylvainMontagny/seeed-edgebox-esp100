@@ -336,6 +336,9 @@ static esp_ping_handle_t g_ping_handle  = NULL;
  * Retourne true si une IP est obtenue. */
 static bool modem_try_once(void)
 {
+
+    gpio_reset_pin(MODEM_TX_PIN);
+    gpio_reset_pin(MODEM_RX_PIN);
     ESP_LOGI(TAG, "[4G] Power cycle...");
     gpio_set_level((gpio_num_t)MODEM_PWR_EN,  0); vTaskDelay(pdMS_TO_TICKS(3000));
     gpio_set_level((gpio_num_t)MODEM_PWR_EN,  1); vTaskDelay(pdMS_TO_TICKS(1000));
@@ -435,6 +438,16 @@ static void reconnect_task(void *pvParameters)
                 rfm_time_init(true);
 
                 if (!g_bacnet_started) {
+                    /*get PPP IP address and set it as BACNET interface */
+                    esp_netif_ip_info_t ip_info;
+                    if (g_ppp_netif && esp_netif_get_ip_info(g_ppp_netif, &ip_info) == ESP_OK 
+                        && ip_info.ip.addr != 0) {
+                        char ip_str[32];
+                        esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
+                        setenv("BACNET_IFACE", ip_str, 1);
+                        ESP_LOGI(TAG, "[BACNET] Interface configurée: %s", ip_str);
+                    }
+                    
                     dlenv_init();
                     atexit(datalink_cleanup);
                     Send_I_Am(&Handler_Transmit_Buffer[0]);
@@ -495,6 +508,16 @@ static void reconnect_task(void *pvParameters)
                 Send_I_Am(&Handler_Transmit_Buffer[0]);
                 ESP_LOGI(TAG, "[RECONNECT] BACnet I_Am envoyé");
             } else {
+                /* === Configure BACnet for PPP interface === */
+                esp_netif_ip_info_t ip_info;
+                if (g_ppp_netif && esp_netif_get_ip_info(g_ppp_netif, &ip_info) == ESP_OK 
+                    && ip_info.ip.addr != 0) {
+                    char ip_str[32];
+                    esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
+                    setenv("BACNET_IFACE", ip_str, 1);
+                    ESP_LOGI(TAG, "[BACNET] Interface configurée: %s", ip_str);
+                }
+                
                 /* BACnet n'avait jamais démarré (hors-ligne au boot) → le lancer */
                 dlenv_init();
                 atexit(datalink_cleanup);
@@ -534,6 +557,19 @@ static void reconnect_task(void *pvParameters)
         
         ntp_initialize();
         rfm_time_init(true);
+        
+        /* === Configure BACnet for WiFi interface === */
+        /* Get WiFi IP and set as BACNET interface for proper discovery */
+        esp_netif_ip_info_t ip_info;
+        esp_netif_t *wifi_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        if (wifi_netif && esp_netif_get_ip_info(wifi_netif, &ip_info) == ESP_OK 
+            && ip_info.ip.addr != 0) {
+            char ip_str[32];
+            esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
+            setenv("BACNET_IFACE", ip_str, 1);
+            ESP_LOGI(TAG, "[BACNET] Interface WiFi configurée: %s", ip_str);
+        }
+        
         dlenv_init();
         atexit(datalink_cleanup);
         Send_I_Am(&Handler_Transmit_Buffer[0]);
@@ -881,6 +917,31 @@ void app_main(void)
     if (connected) {
         ntp_initialize();
         rfm_time_init(true);
+        
+        /* === Configure BACnet with current network interface === */
+#ifdef CONFIG_NETWORK_CONNECTION_4G
+        /* Get PPP IP address */
+        esp_netif_ip_info_t ip_info;
+        if (g_ppp_netif && esp_netif_get_ip_info(g_ppp_netif, &ip_info) == ESP_OK 
+            && ip_info.ip.addr != 0) {
+            char ip_str[32];
+            esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
+            setenv("BACNET_IFACE", ip_str, 1);
+            ESP_LOGI(TAG, "[BACNET] Interface PPP configurée: %s", ip_str);
+        }
+#else
+        /* Get WiFi IP address */
+        esp_netif_ip_info_t ip_info;
+        esp_netif_t *wifi_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        if (wifi_netif && esp_netif_get_ip_info(wifi_netif, &ip_info) == ESP_OK 
+            && ip_info.ip.addr != 0) {
+            char ip_str[32];
+            esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
+            setenv("BACNET_IFACE", ip_str, 1);
+            ESP_LOGI(TAG, "[BACNET] Interface WiFi configurée: %s", ip_str);
+        }
+#endif
+        
         dlenv_init();
         atexit(datalink_cleanup);
         Send_I_Am(&Handler_Transmit_Buffer[0]);
