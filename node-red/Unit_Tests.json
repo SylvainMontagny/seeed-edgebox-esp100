@@ -1,0 +1,485 @@
+[
+    {
+        "id": "8b7d06cf1eb39e35",
+        "type": "tab",
+        "label": "bacnet-esp-tests",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "a03fc88433b38bf0",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "TO CONFIGURE",
+        "func": "flow.set('ip', \"192.168.1.106\");\nflow.set('port', \"47808\");\nflow.set('ipBroadcast', \"192.168.1.255\");\nflow.set('sourcePort',\"48809\");\nflow.set('connectivityType',\"WiFi\"); /* WiFi/4G */\nflow.set('deviceInstance',1234 );\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 270,
+        "y": 40,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "2b91705ccea3242a",
+        "type": "inject",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Start",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "true",
+        "payloadType": "bool",
+        "x": 90,
+        "y": 40,
+        "wires": [
+            [
+                "a03fc88433b38bf0"
+            ]
+        ]
+    },
+    {
+        "id": "808e00b29b95bacf",
+        "type": "inject",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Start",
+        "props": [
+            {
+                "p": "time",
+                "v": "",
+                "vt": "date"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 90,
+        "y": 120,
+        "wires": [
+            [
+                "37c6a4251a03e593"
+            ]
+        ]
+    },
+    {
+        "id": "9ea210555d1bddeb",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "weekly schedule",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 400,
+        "wires": [
+            [
+                "63e328cf752afec8"
+            ]
+        ]
+    },
+    {
+        "id": "75a95b66c42487f0",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Connectivity (4G/WiFi) ",
+        "func": "if (msg.payload != false)\n{\n    msg.object.connectivity = true;\n}\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 160,
+        "wires": [
+            [
+                "f26b2cdf2897e850"
+            ]
+        ]
+    },
+    {
+        "id": "f26b2cdf2897e850",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "NTP sync ",
+        "func": "let client = new bacnet.default({\n    apduTimeout: 2000,\n    broadcastAddress: flow.get('ipBroadcast'),\n    port: flow.get('port'),\n    maxSegments: bacnet.MaxSegmentsAccepted.SEGMENTS_65\n});\n\n\n\nconst value = await client.readProperty(\n    { \n        address: flow.get('ip')\n    }, \n    {\n        instance: flow.get('deviceInstance'),\n        type: 8  //object device\n    },\n    bacnet.PropertyIdentifier.LOCAL_DATE\n);\nmsg.value = value;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [
+            {
+                "var": "bacnet",
+                "module": "@bacnet-js/client"
+            }
+        ],
+        "x": 440,
+        "y": 200,
+        "wires": [
+            [
+                "e76a693d2af35b60",
+                "02899a328dc92bca"
+            ]
+        ]
+    },
+    {
+        "id": "e76a693d2af35b60",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "RTC",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 570,
+        "y": 200,
+        "wires": [
+            [
+                "298077ef917bc4e4"
+            ]
+        ]
+    },
+    {
+        "id": "63e328cf752afec8",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "special event",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 590,
+        "y": 400,
+        "wires": [
+            [
+                "c186a1a9bcaca7f8"
+            ]
+        ]
+    },
+    {
+        "id": "298077ef917bc4e4",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "ephemeride ",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 240,
+        "wires": [
+            [
+                "417afc8558e80980"
+            ]
+        ]
+    },
+    {
+        "id": "417afc8558e80980",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "manuel mode ",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 280,
+        "wires": [
+            [
+                "0a0531a372144889"
+            ]
+        ]
+    },
+    {
+        "id": "0a0531a372144889",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "auto mode ",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 320,
+        "wires": [
+            [
+                "a0b4d0f75b45b296"
+            ]
+        ]
+    },
+    {
+        "id": "a0b4d0f75b45b296",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "mode switch",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 360,
+        "wires": [
+            [
+                "9ea210555d1bddeb"
+            ]
+        ]
+    },
+    {
+        "id": "c186a1a9bcaca7f8",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "muti state values light state",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 440,
+        "wires": [
+            [
+                "fa91416b19c88d32"
+            ]
+        ]
+    },
+    {
+        "id": "fa91416b19c88d32",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "muti state values control mode ",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 480,
+        "wires": [
+            [
+                "915a6ec5153742f5"
+            ]
+        ]
+    },
+    {
+        "id": "915a6ec5153742f5",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "trend log",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 440,
+        "y": 520,
+        "wires": [
+            [
+                "859187eca8bebf59"
+            ]
+        ]
+    },
+    {
+        "id": "859187eca8bebf59",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "set to date bacnet service",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 390,
+        "y": 560,
+        "wires": [
+            [
+                "7e4c02040840e566"
+            ]
+        ]
+    },
+    {
+        "id": "7e4c02040840e566",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "server",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 600,
+        "wires": [
+            [
+                "e129e2a083baae01"
+            ]
+        ]
+    },
+    {
+        "id": "e129e2a083baae01",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "4G with WiFi acces point",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 390,
+        "y": 640,
+        "wires": [
+            [
+                "02213e2256d09d5b"
+            ]
+        ]
+    },
+    {
+        "id": "91646748b2cb0baa",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "robustness",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 720,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "02213e2256d09d5b",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "create object",
+        "func": "return msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 680,
+        "wires": [
+            [
+                "91646748b2cb0baa"
+            ]
+        ]
+    },
+    {
+        "id": "37c6a4251a03e593",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "tests list",
+        "func": "let object = \n{\n    connectivity: false,\n    ntp_sync: false,\n    rtc: false,\n    ephemeride: false,\n    manuel_mode: false,\n    auto_mode: false,\n    mode_switch: false,\n    weekly_schedule: false,\n    special_event: false,\n    multi_state_values_light_state: false,\n    multi_state_values_control_mode: false,\n    trend_log: false,\n    set_to_date_bacnet_service: false,\n    web_server: false,\n    wiFi_acces_point_with_4G: false,\n    create_object: false,\n    robustness: false\n};\n\nlet target = \":192.168.1.106\"\n\nmsg.target = target;\nmsg.object = object;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 240,
+        "y": 120,
+        "wires": [
+            [
+                "e672621317826fc7"
+            ]
+        ]
+    },
+    {
+        "id": "e672621317826fc7",
+        "type": "ping",
+        "z": "8b7d06cf1eb39e35",
+        "protocol": "IPv4",
+        "mode": "triggered",
+        "name": "",
+        "host": "192.168.1.106",
+        "timer": "20",
+        "inputs": 1,
+        "x": 430,
+        "y": 120,
+        "wires": [
+            [
+                "75a95b66c42487f0"
+            ]
+        ]
+    },
+    {
+        "id": "02899a328dc92bca",
+        "type": "debug",
+        "z": "8b7d06cf1eb39e35",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 640,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "79b5dfd09a6d7323",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-node-ping": "0.3.3"
+        }
+    }
+]
