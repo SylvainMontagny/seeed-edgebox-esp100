@@ -19,7 +19,7 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 270,
+        "x": 280,
         "y": 40,
         "wires": [
             []
@@ -42,7 +42,7 @@
         "topic": "",
         "payload": "true",
         "payloadType": "bool",
-        "x": 90,
+        "x": 100,
         "y": 40,
         "wires": [
             [
@@ -51,87 +51,22 @@
         ]
     },
     {
-        "id": "808e00b29b95bacf",
-        "type": "inject",
-        "z": "8b7d06cf1eb39e35",
-        "name": "Start",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": true,
-        "onceDelay": "0.3",
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 90,
-        "y": 120,
-        "wires": [
-            [
-                "37c6a4251a03e593"
-            ]
-        ]
-    },
-    {
-        "id": "9ea210555d1bddeb",
-        "type": "function",
-        "z": "8b7d06cf1eb39e35",
-        "name": "weekly schedule",
-        "func": "return msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 540,
-        "y": 460,
-        "wires": [
-            [
-                "63e328cf752afec8"
-            ]
-        ]
-    },
-    {
         "id": "75a95b66c42487f0",
         "type": "function",
         "z": "8b7d06cf1eb39e35",
         "name": "Connectivity (4G/WiFi) (0)",
-        "func": "if (msg.payload != false)\n{\nlet temp = flow.get(\"tests\");\ntemp.connectivity = true;\nflow.set(\"tests\", temp);\n}\nlet step = flow.get('step');\nstep++;\nflow.set('step',step);\nmsg.payload = \"START\";\nreturn msg;",
+        "func": "if (msg.payload != false)\n{\n    let temp = flow.get(\"tests\");\n    temp.connectivity = true;\n    flow.set(\"tests\", temp);\n}\nlet step = flow.get('step');\nstep++;\nflow.set('step',step);\nmsg.payload = \"START\";\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 520,
-        "y": 180,
+        "x": 610,
+        "y": 200,
         "wires": [
             [
-                "f26b2cdf2897e850"
-            ]
-        ]
-    },
-    {
-        "id": "63e328cf752afec8",
-        "type": "function",
-        "z": "8b7d06cf1eb39e35",
-        "name": "special event",
-        "func": "return msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 710,
-        "y": 460,
-        "wires": [
-            [
-                "c186a1a9bcaca7f8"
+                "8751f7813b84f7a0"
             ]
         ]
     },
@@ -139,8 +74,8 @@
         "id": "298077ef917bc4e4",
         "type": "function",
         "z": "8b7d06cf1eb39e35",
-        "name": "ephemeride (2)",
-        "func": "let step = flow.get('step');\n    let client = new bacnet.default({\n        apduTimeout: 2000,\n        broadcastAddress: flow.get('ipBroadcast'),\n        port: flow.get('port'),\n        maxSegments: bacnet.MaxSegmentsAccepted.SEGMENTS_65\n    });\n\n\n    switch (msg.payload)   \n    {\n        default:\n             let datevalue = await client.readProperty({\n                address: flow.get('ip')\n            }, {\n                instance: flow.get('deviceInstance'),\n                type: 8\n            }, bacnet.PropertyIdentifier.LOCAL_DATE);\n\n            let timevalue = await client.readProperty({\n                address: flow.get('ip')\n            }, {\n                instance: flow.get('deviceInstance'),\n                type: 8\n            }, bacnet.PropertyIdentifier.LOCAL_TIME);\n            let nightStartTime;\n            let nightEndTime;\n            let bacnetFullTime = bacnettimeConverter(datevalue.values[0].value, timevalue.values[0].value);\n            msg.payload = 'Are the night start/end times correct? \\n Press OK/NOT OK. \\n device time : ' + bacnetFullTime + '. \\n night start time: ' + nightStartTime + '. \\n night end time: ' + nightEndTime;\n            node.send([null, msg]);\n            break;\n        case (\"DONE\"):\n            \n            break;\n        case (\"OK\"):\n            step++;\n            node.warn(\"oops\");\n            flow.set('step',step);\n  \n            break;\n        case (\"NOK\"):\n            step++;\n            flow.set('step',step);\n            break;\n        case (\"SKIP\"):\n            step++;\n            flow.set('step',step);\n            break;\n    }\n\n\n\n function bacnettimeConverter(bacnetDate, bacnetTime) \n {\n    let date = \"\";\n    let time = \"\";\n    for (let i = 4; i < 15; i++) {\n        date += bacnetDate.toString()[i];\n    }\n    for (let i = 16; i < 24; i++) {\n\n        time += bacnetTime.toString()[i];\n\n    }\n    var bacnetFullTime = date + ' ' + time;\n    return bacnetFullTime;\n }\n",
+        "name": "ephemeride/weekly (3)",
+        "func": "    let step = flow.get('step');\n    let client = new bacnet.default({\n        apduTimeout: 2000,\n        broadcastAddress: flow.get('ipBroadcast'),\n        port: flow.get('port'),\n        maxSegments: bacnet.MaxSegmentsAccepted.SEGMENTS_65\n    });\n\n\n            switch (msg.payload)   \n            {\n\n                \n                default:\n                    try \n                    {\n                    const address = { address:flow.get('ip')+\":\"+flow.get('port')};\n                    const value = await client.readProperty(\n                        address,\n                        { type: bacnet.ObjectType.SCHEDULE, instance: 0},\n                        bacnet.PropertyIdentifier.WEEKLY_SCHEDULE\n                    );\n\n                    const weekly = (value.values[0]?.value) || [];\n                    \n                        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];\n                    \n                  \n\n                 \n\n                    let starttime = new Array;\n                    let endtime = new Array;\n                    \n                    for(let i = 0;i<7; i++)\n                    {\n                        let temp =  weekly[i];\n                     \n                        starttime[i] = bacnettimeConverter(temp[0].time.value);\n                        endtime[i] =   bacnettimeConverter(temp[1].time.value);\n                    }\n\n                    msg.payload = 'Are the night start/end times correct? \\n Press OK/NOT OK. \\n' + \n                    '\\n Monday :' + starttime[0] +' to ' + endtime[0] + \n                    '\\n Tuesday :' + starttime[1] + ' to ' + endtime[1] + \n                    '\\n Wednesday :' + starttime[2] + ' to ' + endtime[2] + \n                    '\\n Thursday :' + starttime[3] + ' to ' + endtime[3] + \n                    '\\n Friday :' + starttime[4] + ' to ' + endtime[4] + \n                    '\\n Saturday :' + starttime[5] + ' to ' + endtime[5] + \n                    '\\n Sunday :' + starttime[6] + ' to ' + endtime[6] \n                    node.send([null, msg]);\n                } catch (err) {\n                    node.error('Erreur: ' + JSON.stringify(err, Object.getOwnPropertyNames(err)));\n                }\n                \n    \n            break;\n        case (\"OK\"):\n\n            let temp = flow.get(\"tests\");\n            temp.ephemeride = true;\n            temp.weekly_schedule = true;\n            msg.payload = \"START\";\n            flow.set(\"tests\", temp);\n            step++;\n            flow.set('step',step);\n            return [msg, null];\n            break;\n        case (\"NOK\"):\n            step++;\n            flow.set('step',step);\n             msg.payload = \"START\";\n            return [msg, null];\n            break;\n        case (\"SKIP\"):\n            step++;\n            flow.set('step',step);\n            msg.payload = \"START\";\n            return [msg, null];\n            break;\n    }\n\n\n\n  function bacnettimeConverter(bacnetTime) {\n        let time = \"\";\n        for (let i = 16; i < 24; i++) {\n\n            time += bacnetTime.toString()[i];\n\n        }\n        var bacnetFullTime =  time;\n        return bacnetFullTime;\n    }",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -152,114 +87,14 @@
                 "module": "@bacnet-js/client"
             }
         ],
-        "x": 540,
-        "y": 300,
-        "wires": [
-            [
-                "417afc8558e80980"
-            ],
-            [
-                "bfcdae28443c3b9f"
-            ]
-        ]
-    },
-    {
-        "id": "417afc8558e80980",
-        "type": "function",
-        "z": "8b7d06cf1eb39e35",
-        "name": "manuel mode ",
-        "func": "return msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 540,
+        "x": 440,
         "y": 340,
         "wires": [
             [
-                "0a0531a372144889"
-            ]
-        ]
-    },
-    {
-        "id": "0a0531a372144889",
-        "type": "function",
-        "z": "8b7d06cf1eb39e35",
-        "name": "auto mode ",
-        "func": "return msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 550,
-        "y": 380,
-        "wires": [
+                "885c0316ccae1346"
+            ],
             [
-                "a0b4d0f75b45b296"
-            ]
-        ]
-    },
-    {
-        "id": "a0b4d0f75b45b296",
-        "type": "function",
-        "z": "8b7d06cf1eb39e35",
-        "name": "mode switch",
-        "func": "return msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 550,
-        "y": 420,
-        "wires": [
-            [
-                "9ea210555d1bddeb"
-            ]
-        ]
-    },
-    {
-        "id": "c186a1a9bcaca7f8",
-        "type": "function",
-        "z": "8b7d06cf1eb39e35",
-        "name": "muti state values light state",
-        "func": "return msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 500,
-        "y": 500,
-        "wires": [
-            [
-                "fa91416b19c88d32"
-            ]
-        ]
-    },
-    {
-        "id": "fa91416b19c88d32",
-        "type": "function",
-        "z": "8b7d06cf1eb39e35",
-        "name": "muti state values control mode ",
-        "func": "return msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 480,
-        "y": 540,
-        "wires": [
-            [
-                "915a6ec5153742f5"
+                "bfcdae28443c3b9f"
             ]
         ]
     },
@@ -268,18 +103,18 @@
         "type": "function",
         "z": "8b7d06cf1eb39e35",
         "name": "trend log",
-        "func": "return msg;",
+        "func": "let step = flow.get('step');\nstep++;\nflow.set('step',step);\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 560,
-        "y": 580,
+        "x": 400,
+        "y": 440,
         "wires": [
             [
-                "859187eca8bebf59"
+                "86c2f580b01702c3"
             ]
         ]
     },
@@ -288,58 +123,18 @@
         "type": "function",
         "z": "8b7d06cf1eb39e35",
         "name": "set to date bacnet service",
-        "func": "return msg;",
+        "func": "let step = flow.get('step');\nstep++;\nflow.set('step',step);\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 510,
-        "y": 620,
+        "x": 890,
+        "y": 360,
         "wires": [
             [
-                "7e4c02040840e566"
-            ]
-        ]
-    },
-    {
-        "id": "7e4c02040840e566",
-        "type": "function",
-        "z": "8b7d06cf1eb39e35",
-        "name": "server",
-        "func": "return msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 570,
-        "y": 660,
-        "wires": [
-            [
-                "e129e2a083baae01"
-            ]
-        ]
-    },
-    {
-        "id": "e129e2a083baae01",
-        "type": "function",
-        "z": "8b7d06cf1eb39e35",
-        "name": "4G with WiFi acces point",
-        "func": "return msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 510,
-        "y": 700,
-        "wires": [
-            [
-                "02213e2256d09d5b"
+                "edb758cff2621840"
             ]
         ]
     },
@@ -348,7 +143,7 @@
         "type": "function",
         "z": "8b7d06cf1eb39e35",
         "name": "robustness",
-        "func": "let step = flow.get('step');\nif(step == 2)\n{\n    let client = new bacnet.default({\n        apduTimeout: 2000,\n        broadcastAddress: flow.get('ipBroadcast'),\n        port: flow.get('port'),\n        maxSegments: bacnet.MaxSegmentsAccepted.SEGMENTS_65\n    });\n\n\n    switch (msg.payload)   \n    {\n        case (\"START\"):\n\n            break;\n        case (\"DONE\"):\n            \n            break;\n        case (\"OK\"):\n            step++;\n            flow.set('step',step);\n            break;\n        case (\"NOK\"):\n            step++;\n            flow.set('step',step);\n            break;\n        case (\"SKIP\"):\n            step++;\n            flow.set('step',step);\n            break;\n    }\n}\n\nreturn msg;",
+        "func": "let step = flow.get('step');\nstep++;\nflow.set('step',step);\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -360,10 +155,12 @@
                 "module": "@bacnet-js/client"
             }
         ],
-        "x": 550,
-        "y": 780,
+        "x": 850,
+        "y": 440,
         "wires": [
-            []
+            [
+                "64b6334bfa6a05e5"
+            ]
         ]
     },
     {
@@ -371,18 +168,18 @@
         "type": "function",
         "z": "8b7d06cf1eb39e35",
         "name": "create object",
-        "func": "return msg;",
+        "func": "let step = flow.get('step');\nstep++;\nflow.set('step',step);\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 550,
-        "y": 740,
+        "x": 850,
+        "y": 400,
         "wires": [
             [
-                "91646748b2cb0baa"
+                "1f955fcc6047b0a2"
             ]
         ]
     },
@@ -391,18 +188,18 @@
         "type": "function",
         "z": "8b7d06cf1eb39e35",
         "name": "tests list",
-        "func": "let tests = \n{\n    connectivity: false,\n    ntp_sync: false,\n    web_server: false,\n    rtc: false,\n    ephemeride: false,\n    manuel_mode: false,\n    auto_mode: false,\n    mode_switch: false,\n    weekly_schedule: false,\n    special_event: false,\n    multi_state_values_light_state: false,\n    multi_state_values_control_mode: false,\n    trend_log: false,\n    set_to_date_bacnet_service: false,\n    wiFi_acces_point_with_4G: false,\n    create_object: false,\n    robustness: false\n};\n\nlet step = 0;\n\nflow.set('step',step);\nflow.set('tests',tests);\nreturn msg;",
+        "func": "let tests = \n{\n    connectivity: false,\n    ntp_sync: false,\n    web_server: false,\n    rtc: false,\n    ephemeride: false,\n    weekly_schedule: false,\n    special_events: false,\n    multi_state_values_light_state: false,\n    trend_log: false,\n    set_to_date_bacnet_service: false,\n    wiFi_acces_point_with_4G: false,\n    create_object: false,\n    robustness: false\n};\n\nlet step = 0;\n\nflow.set('step',step);\nflow.set('tests',tests);\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 240,
+        "x": 440,
         "y": 120,
         "wires": [
             [
-                "e672621317826fc7"
+                "7d0299fbde334ed8"
             ]
         ]
     },
@@ -413,7 +210,7 @@
         "group": "1e5232f94244e6dc",
         "name": "DONE button",
         "label": "Done",
-        "order": 2,
+        "order": 3,
         "width": 0,
         "height": 0,
         "emulateClick": true,
@@ -437,8 +234,8 @@
         "enablePointerup": false,
         "pointerupPayload": "",
         "pointerupPayloadType": "str",
-        "x": 920,
-        "y": 700,
+        "x": 1030,
+        "y": 180,
         "wires": [
             [
                 "ef27b18ffdbd21c6"
@@ -452,7 +249,7 @@
         "group": "1e5232f94244e6dc",
         "name": "OK button",
         "label": "OK",
-        "order": 3,
+        "order": 4,
         "width": 0,
         "height": 0,
         "emulateClick": true,
@@ -476,8 +273,8 @@
         "enablePointerup": false,
         "pointerupPayload": "",
         "pointerupPayloadType": "str",
-        "x": 910,
-        "y": 660,
+        "x": 1020,
+        "y": 140,
         "wires": [
             [
                 "f3d1d26f28211c5c"
@@ -491,7 +288,7 @@
         "group": "1e5232f94244e6dc",
         "name": "NOT OK button",
         "label": "NOT OK",
-        "order": 4,
+        "order": 5,
         "width": 0,
         "height": 0,
         "emulateClick": true,
@@ -515,8 +312,8 @@
         "enablePointerup": false,
         "pointerupPayload": "",
         "pointerupPayloadType": "str",
-        "x": 930,
-        "y": 620,
+        "x": 1040,
+        "y": 100,
         "wires": [
             [
                 "d3a4b342507cd390"
@@ -543,8 +340,8 @@
         "className": "",
         "value": "payload",
         "valueType": "msg",
-        "x": 920,
-        "y": 580,
+        "x": 1030,
+        "y": 60,
         "wires": []
     },
     {
@@ -554,14 +351,10 @@
         "name": "link out NOT OK button",
         "mode": "link",
         "links": [
-            "eb3aa5c9d5956840",
-            "73d419fe4c387636",
-            "6b2b0457c475e340",
-            "185f06ecc2f89399",
-            "026952e6f228508e"
+            "ea5f227986c8b522"
         ],
-        "x": 1045,
-        "y": 620,
+        "x": 1165,
+        "y": 100,
         "wires": []
     },
     {
@@ -571,14 +364,10 @@
         "name": "link out OK button",
         "mode": "link",
         "links": [
-            "eb3aa5c9d5956840",
-            "73d419fe4c387636",
-            "6b2b0457c475e340",
-            "185f06ecc2f89399",
-            "026952e6f228508e"
+            "ea5f227986c8b522"
         ],
-        "x": 1005,
-        "y": 660,
+        "x": 1145,
+        "y": 140,
         "wires": []
     },
     {
@@ -588,14 +377,10 @@
         "name": "link out Done button",
         "mode": "link",
         "links": [
-            "eb3aa5c9d5956840",
-            "73d419fe4c387636",
-            "6b2b0457c475e340",
-            "185f06ecc2f89399",
-            "026952e6f228508e"
+            "ea5f227986c8b522"
         ],
-        "x": 1025,
-        "y": 700,
+        "x": 1145,
+        "y": 180,
         "wires": []
     },
     {
@@ -607,26 +392,13 @@
             "e9a70ca434d50595",
             "bfcdae28443c3b9f"
         ],
-        "x": 815,
-        "y": 580,
+        "x": 905,
+        "y": 60,
         "wires": [
             [
                 "0e82609a69fe1692"
             ]
         ]
-    },
-    {
-        "id": "e9a70ca434d50595",
-        "type": "link out",
-        "z": "8b7d06cf1eb39e35",
-        "name": "link out RTC instructions",
-        "mode": "link",
-        "links": [
-            "d0d2f6f6da733d09"
-        ],
-        "x": 705,
-        "y": 180,
-        "wires": []
     },
     {
         "id": "27cf69f1bf400d1e",
@@ -645,8 +417,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 780,
-        "y": 620,
+        "x": 890,
+        "y": 100,
         "wires": [
             [
                 "a0fa3c63b231b6e6"
@@ -670,8 +442,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 780,
-        "y": 660,
+        "x": 890,
+        "y": 140,
         "wires": [
             [
                 "85de2ef0db0f8969"
@@ -695,8 +467,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 780,
-        "y": 700,
+        "x": 890,
+        "y": 180,
         "wires": [
             [
                 "2b62f5bbac4c90d6"
@@ -710,7 +482,7 @@
         "group": "1e5232f94244e6dc",
         "name": "Skip step button",
         "label": "Skip step",
-        "order": 5,
+        "order": 6,
         "width": 0,
         "height": 0,
         "emulateClick": true,
@@ -734,8 +506,8 @@
         "enablePointerup": false,
         "pointerupPayload": "",
         "pointerupPayloadType": "str",
-        "x": 930,
-        "y": 740,
+        "x": 1040,
+        "y": 220,
         "wires": [
             [
                 "4a188a87b5126d29"
@@ -749,14 +521,10 @@
         "name": "link out Skip step button",
         "mode": "link",
         "links": [
-            "eb3aa5c9d5956840",
-            "73d419fe4c387636",
-            "6b2b0457c475e340",
-            "185f06ecc2f89399",
-            "026952e6f228508e"
+            "ea5f227986c8b522"
         ],
-        "x": 1055,
-        "y": 740,
+        "x": 1165,
+        "y": 220,
         "wires": []
     },
     {
@@ -776,11 +544,497 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 780,
-        "y": 740,
+        "x": 890,
+        "y": 220,
         "wires": [
             [
                 "b1fd28e5041f6986"
+            ]
+        ]
+    },
+    {
+        "id": "e672621317826fc7",
+        "type": "ping",
+        "z": "8b7d06cf1eb39e35",
+        "protocol": "IPv4",
+        "mode": "triggered",
+        "name": "",
+        "host": "192.168.1.106",
+        "timer": "20",
+        "inputs": 1,
+        "x": 410,
+        "y": 200,
+        "wires": [
+            [
+                "75a95b66c42487f0"
+            ]
+        ]
+    },
+    {
+        "id": "d8200f5432fa66a6",
+        "type": "ui-button",
+        "z": "8b7d06cf1eb39e35",
+        "group": "1e5232f94244e6dc",
+        "name": "Start test button",
+        "label": "restart tests",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "emulateClick": true,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "",
+        "payloadType": "date",
+        "topic": "topic",
+        "topicType": "msg",
+        "buttonColor": "#0FF0F0",
+        "textColor": "",
+        "iconColor": "",
+        "enableClick": true,
+        "enablePointerdown": false,
+        "pointerdownPayload": "",
+        "pointerdownPayloadType": "str",
+        "enablePointerup": false,
+        "pointerupPayload": "",
+        "pointerupPayloadType": "str",
+        "x": 280,
+        "y": 120,
+        "wires": [
+            [
+                "37c6a4251a03e593"
+            ]
+        ]
+    },
+    {
+        "id": "bfcdae28443c3b9f",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "link out RTC instructions",
+        "mode": "link",
+        "links": [
+            "d0d2f6f6da733d09"
+        ],
+        "x": 585,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "f26b2cdf2897e850",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "NTP sync (1)",
+        "func": "    let step = flow.get('step');\n    let client = new bacnet.default({\n        apduTimeout: 2000,\n        broadcastAddress: flow.get('ipBroadcast'),\n        port: flow.get('port'),\n        maxSegments: bacnet.MaxSegmentsAccepted.SEGMENTS_65\n    });\n\n    switch (msg.payload) {\n\n\n        case (\"START\"):\n\n            msg.payload = \"Shut down the device, wait a few seconds, turn it back on, wait for it to finish booting, then click 'done'\";\n            node.send([null, msg]);\n            break;\n        case (\"DONE\"):\n            let datevalue = await client.readProperty({\n                address: flow.get('ip')\n            }, {\n                instance: flow.get('deviceInstance'),\n                type: 8\n            }, bacnet.PropertyIdentifier.LOCAL_DATE);\n\n            let timevalue = await client.readProperty({\n                address: flow.get('ip')\n            }, {\n                instance: flow.get('deviceInstance'),\n                type: 8\n            }, bacnet.PropertyIdentifier.LOCAL_TIME);\n\n            let parsedTime = timeConverter(flow.get('time'));\n            let bacnetFullTime = bacnettimeConverter(datevalue.values[0].value, timevalue.values[0].value);\n            msg.payload = 'Is the device current time conform ? \\n Press OK/NOT OK. \\n device time : ' + bacnetFullTime + ' \\n UTC time : ' + parsedTime;\n            node.send([null, msg]);\n            break;\n        case (\"OK\"):\n            let temp = flow.get(\"tests\");\n            temp.ntp_sync = true;\n            temp.rtc = true;\n            flow.set(\"tests\", temp);\n            msg.payload = \"interogating web server\";\n            node.send([null, msg]);\n            msg.payload = \"START\";\n            step++;\n  \n            flow.set('step',step);\n            return [msg, null];\n            break;\n        case (\"NOK\"):\n        \n            msg.payload = \"interogating web server\";\n            node.send([null, msg]);\n            msg.payload = \"START\";\n            step++;\n\n            flow.set('step',step);\n            return [msg, null];\n            break;\n        case (\"SKIP\"):\n        \n            msg.payload = \"interogating web server\";\n            node.send([null, msg]);\n            msg.payload = \"START\";\n            \n            step++;\n\n            flow.set('step',step);\n            return [msg, null];\n            break;\n\n    }\n\n    function timeConverter(UNIX_timestamp) {\n        var a = new Date(UNIX_timestamp * 1000);\n        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];\n        var year = a.getFullYear();\n        var month = months[a.getMonth()];\n        var date = a.getDate();\n        var hour = a.getHours();\n        var min = a.getMinutes();\n        var sec = a.getSeconds();\n        var time = month + ' ' + date + ' ' + year + ' ' + hour + ':' + min + ':' + sec;\n        return time;\n    }\n\n    function bacnettimeConverter(bacnetDate, bacnetTime) {\n        let date = \"\";\n        let time = \"\";\n        for (let i = 4; i < 15; i++) {\n            date += bacnetDate.toString()[i];\n        }\n        for (let i = 16; i < 24; i++) {\n\n            time += bacnetTime.toString()[i];\n\n        }\n        var bacnetFullTime = date + ' ' + time;\n        return bacnetFullTime;\n    }\n",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [
+            {
+                "var": "bacnet",
+                "module": "@bacnet-js/client"
+            }
+        ],
+        "x": 410,
+        "y": 260,
+        "wires": [
+            [
+                "5ba630764cac92b1"
+            ],
+            [
+                "e9a70ca434d50595"
+            ]
+        ]
+    },
+    {
+        "id": "46e019e2cfaabe93",
+        "type": "http request",
+        "z": "8b7d06cf1eb39e35",
+        "name": "",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://192.168.1.106",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 410,
+        "y": 300,
+        "wires": [
+            [
+                "64dd42254d9e9bb3"
+            ]
+        ]
+    },
+    {
+        "id": "d9a69ad4a5da8d9e",
+        "type": "switch",
+        "z": "8b7d06cf1eb39e35",
+        "name": "scheduler",
+        "property": "step",
+        "propertyType": "flow",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "0",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "1",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "2",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "3",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "4",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "5",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "6",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "7",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "8",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "9",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "10",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "11",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "12",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "13",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "14",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "15",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "16",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 17,
+        "x": 200,
+        "y": 420,
+        "wires": [
+            [
+                "e672621317826fc7"
+            ],
+            [
+                "f26b2cdf2897e850"
+            ],
+            [
+                "46e019e2cfaabe93"
+            ],
+            [
+                "298077ef917bc4e4"
+            ],
+            [
+                "63e328cf752afec8"
+            ],
+            [
+                "915a6ec5153742f5"
+            ],
+            [
+                "b1f8f76ccdd2dee5"
+            ],
+            [
+                "c186a1a9bcaca7f8"
+            ],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "27bdb4d6632ee748",
+        "type": "link in",
+        "z": "8b7d06cf1eb39e35",
+        "name": "next step",
+        "links": [
+            "18558b2df522dc49",
+            "1f955fcc6047b0a2",
+            "2dcda73e51c938e2",
+            "5ba630764cac92b1",
+            "5cab1d853519b253",
+            "64b6334bfa6a05e5",
+            "7d0299fbde334ed8",
+            "7d27094bf2815fcb",
+            "86c2f580b01702c3",
+            "8751f7813b84f7a0",
+            "885c0316ccae1346",
+            "e6f0b3813cb76e48",
+            "edb758cff2621840",
+            "f19f1d9f1e044a7c",
+            "05343baf24dfdf5e"
+        ],
+        "x": 85,
+        "y": 440,
+        "wires": [
+            [
+                "d9a69ad4a5da8d9e",
+                "920a9234f295693b"
+            ]
+        ]
+    },
+    {
+        "id": "7d0299fbde334ed8",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "link out RTC instructions",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 565,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "2dcda73e51c938e2",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 535,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "64b6334bfa6a05e5",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 965,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "1f955fcc6047b0a2",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 965,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "18558b2df522dc49",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 1045,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "edb758cff2621840",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 1035,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "86c2f580b01702c3",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 505,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "885c0316ccae1346",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 585,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "5ba630764cac92b1",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 535,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "8751f7813b84f7a0",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 765,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "e6f0b3813cb76e48",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 705,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "ea5f227986c8b522",
+        "type": "link in",
+        "z": "8b7d06cf1eb39e35",
+        "name": "link in RTC instructions",
+        "links": [
+            "4a188a87b5126d29",
+            "d3a4b342507cd390",
+            "ef27b18ffdbd21c6",
+            "f3d1d26f28211c5c"
+        ],
+        "x": 85,
+        "y": 400,
+        "wires": [
+            [
+                "d9a69ad4a5da8d9e"
+            ]
+        ]
+    },
+    {
+        "id": "808e00b29b95bacf",
+        "type": "inject",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Start",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "0.3",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 130,
+        "y": 120,
+        "wires": [
+            [
+                "d8200f5432fa66a6"
             ]
         ]
     },
@@ -801,7 +1055,7 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 490,
+        "x": 460,
         "y": 40,
         "wires": [
             [
@@ -821,96 +1075,31 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 610,
+        "x": 580,
         "y": 40,
         "wires": [
             []
         ]
     },
     {
-        "id": "e672621317826fc7",
-        "type": "ping",
+        "id": "920a9234f295693b",
+        "type": "debug",
         "z": "8b7d06cf1eb39e35",
-        "protocol": "IPv4",
-        "mode": "triggered",
-        "name": "",
-        "host": "192.168.1.106",
-        "timer": "20",
-        "inputs": 1,
-        "x": 530,
-        "y": 140,
-        "wires": [
-            [
-                "75a95b66c42487f0"
-            ]
-        ]
+        "name": "debug ",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 150,
+        "y": 580,
+        "wires": []
     },
     {
-        "id": "d8200f5432fa66a6",
-        "type": "ui-button",
-        "z": "8b7d06cf1eb39e35",
-        "group": "1e5232f94244e6dc",
-        "name": "Start test button",
-        "label": "Start tests",
-        "order": 6,
-        "width": 0,
-        "height": 0,
-        "emulateClick": true,
-        "tooltip": "",
-        "color": "",
-        "bgcolor": "",
-        "className": "",
-        "icon": "",
-        "iconPosition": "left",
-        "payload": "",
-        "payloadType": "date",
-        "topic": "topic",
-        "topicType": "msg",
-        "buttonColor": "#FFFFFF",
-        "textColor": "",
-        "iconColor": "",
-        "enableClick": true,
-        "enablePointerdown": false,
-        "pointerdownPayload": "",
-        "pointerdownPayloadType": "str",
-        "enablePointerup": false,
-        "pointerupPayload": "",
-        "pointerupPayloadType": "str",
-        "x": 240,
-        "y": 80,
-        "wires": [
-            [
-                "37c6a4251a03e593"
-            ]
-        ]
-    },
-    {
-        "id": "33436ed1e0121e48",
-        "type": "inject",
-        "z": "8b7d06cf1eb39e35",
-        "name": "Start",
-        "props": [
-            {
-                "p": "time",
-                "v": "",
-                "vt": "date"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "x": 90,
-        "y": 80,
-        "wires": [
-            [
-                "d8200f5432fa66a6"
-            ]
-        ]
-    },
-    {
-        "id": "bfcdae28443c3b9f",
+        "id": "e9a70ca434d50595",
         "type": "link out",
         "z": "8b7d06cf1eb39e35",
         "name": "link out RTC instructions",
@@ -918,36 +1107,94 @@
         "links": [
             "d0d2f6f6da733d09"
         ],
-        "x": 705,
-        "y": 220,
+        "x": 535,
+        "y": 260,
         "wires": []
     },
     {
-        "id": "eb3aa5c9d5956840",
-        "type": "link in",
+        "id": "08f3cc09508cab26",
+        "type": "ui-table",
         "z": "8b7d06cf1eb39e35",
-        "name": "link in RTC instructions",
-        "links": [
-            "d3a4b342507cd390",
-            "ef27b18ffdbd21c6",
-            "f3d1d26f28211c5c",
-            "4a188a87b5126d29"
-        ],
-        "x": 65,
-        "y": 340,
+        "group": "1e5232f94244e6dc",
+        "name": "Test results",
+        "label": "RESULTS",
+        "order": 7,
+        "width": 0,
+        "height": 0,
+        "maxrows": "12",
+        "passthru": false,
+        "autocols": true,
+        "showSearch": true,
+        "deselect": true,
+        "selectionType": "none",
+        "columns": [],
+        "mobileBreakpoint": "lg",
+        "mobileBreakpointType": "defaults",
+        "action": "replace",
+        "className": "",
+        "x": 1120,
+        "y": 260,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "b2837e3f42664aa3",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "results formater",
+        "func": "let results = flow.get('tests');\nmsg.payload = results;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 950,
+        "y": 260,
         "wires": [
             [
-                "65e97c97ea4d0466"
+                "08f3cc09508cab26"
             ]
         ]
     },
     {
-        "id": "f26b2cdf2897e850",
+        "id": "a7675778e0a12091",
+        "type": "link in",
+        "z": "8b7d06cf1eb39e35",
+        "name": "next step",
+        "links": [
+            "18558b2df522dc49",
+            "1f955fcc6047b0a2",
+            "2dcda73e51c938e2",
+            "5ba630764cac92b1",
+            "5cab1d853519b253",
+            "64b6334bfa6a05e5",
+            "7d0299fbde334ed8",
+            "7d27094bf2815fcb",
+            "86c2f580b01702c3",
+            "8751f7813b84f7a0",
+            "885c0316ccae1346",
+            "e6f0b3813cb76e48",
+            "edb758cff2621840",
+            "f19f1d9f1e044a7c",
+            "05343baf24dfdf5e"
+        ],
+        "x": 835,
+        "y": 260,
+        "wires": [
+            [
+                "b2837e3f42664aa3"
+            ]
+        ]
+    },
+    {
+        "id": "64dd42254d9e9bb3",
         "type": "function",
         "z": "8b7d06cf1eb39e35",
-        "name": "NTP sync (1)",
-        "func": "    let step = flow.get('step');\n    let client = new bacnet.default({\n        apduTimeout: 2000,\n        broadcastAddress: flow.get('ipBroadcast'),\n        port: flow.get('port'),\n        maxSegments: bacnet.MaxSegmentsAccepted.SEGMENTS_65\n    });\n\n    switch (msg.payload) {\n\n\n        case (\"START\"):\n\n            msg.payload = \"Eteindre le device testé, attendre un moment arbitraire, le rallumer. Une fois rallumé, cliquer sur le bouton 'Done'\";\n            node.send([null, msg]);\n            break;\n        case (\"DONE\"):\n            let datevalue = await client.readProperty({\n                address: flow.get('ip')\n            }, {\n                instance: flow.get('deviceInstance'),\n                type: 8\n            }, bacnet.PropertyIdentifier.LOCAL_DATE);\n\n            let timevalue = await client.readProperty({\n                address: flow.get('ip')\n            }, {\n                instance: flow.get('deviceInstance'),\n                type: 8\n            }, bacnet.PropertyIdentifier.LOCAL_TIME);\n\n            let parsedTime = timeConverter(flow.get('time'));\n            let bacnetFullTime = bacnettimeConverter(datevalue.values[0].value, timevalue.values[0].value);\n            msg.payload = 'Is the device current time conform ? \\n Press OK/NOT OK. \\n device time : ' + bacnetFullTime + ' \\n UTC time : ' + parsedTime;\n            node.send([null, msg]);\n            break;\n        case (\"OK\"):\n            let temp = flow.get(\"tests\");\n            temp.ntp_sync = true;\n            flow.set(\"tests\", temp);\n            msg.payload = \"ntp sync OK\";\n            node.send([null, msg]);\n            msg.payload = \"START\";\n            step++;\n            node.warn(\"going to step\" +  step);\n            flow.set('step',step);\n            return [msg, null];\n            break;\n        case (\"NOK\"):\n            msg.payload = \"ntp sync not OK\";\n            node.send([null, msg]);\n            msg.payload = \"START\";\n            step++;\n            node.warn(\"going to step\" +  step);\n            flow.set('step',step);\n            return [msg, null];\n            break;\n        case (\"SKIP\"):\n            msg.payload = \"Skipped\";\n            node.send([null, msg]);\n            msg.payload = \"START\";\n            step++;\n            node.warn(\"going to step\" +  step);\n            flow.set('step',step);\n            return [msg, null];\n            break;\n\n    }\n\n    function timeConverter(UNIX_timestamp) {\n        var a = new Date(UNIX_timestamp * 1000);\n        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];\n        var year = a.getFullYear();\n        var month = months[a.getMonth()];\n        var date = a.getDate();\n        var hour = a.getHours();\n        var min = a.getMinutes();\n        var sec = a.getSeconds();\n        var time = month + ' ' + date + ' ' + year + ' ' + hour + ':' + min + ':' + sec;\n        return time;\n    }\n\n    function bacnettimeConverter(bacnetDate, bacnetTime) {\n        let date = \"\";\n        let time = \"\";\n        for (let i = 4; i < 15; i++) {\n            date += bacnetDate.toString()[i];\n        }\n        for (let i = 16; i < 24; i++) {\n\n            time += bacnetTime.toString()[i];\n\n        }\n        var bacnetFullTime = date + ' ' + time;\n        return bacnetFullTime;\n    }\n",
-        "outputs": 2,
+        "name": "Webserver (2)",
+        "func": "if(msg.statusCode == 200)\n{\n    let temp = flow.get(\"tests\");\n    temp.web_server = true;\n    flow.set(\"tests\", temp);\n}\nlet step = flow.get('step');\nstep++;\nflow.set('step',step);\nreturn msg;\n   \n\n    \n\n   ",
+        "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
@@ -958,117 +1205,125 @@
                 "module": "@bacnet-js/client"
             }
         ],
-        "x": 560,
-        "y": 220,
+        "x": 580,
+        "y": 300,
         "wires": [
             [
-                "46e019e2cfaabe93"
-            ],
-            [
-                "e9a70ca434d50595"
+                "e6f0b3813cb76e48"
             ]
         ]
     },
     {
-        "id": "65e97c97ea4d0466",
+        "id": "63e328cf752afec8",
         "type": "function",
         "z": "8b7d06cf1eb39e35",
-        "name": "Switch",
-        "func": "let step = flow.get('step');\nswitch(step)\n{\n    case 1:\n    return[msg,null]\n\n    case 2:\n    return[null,msg]\n    \n}\n",
-        "outputs": 2,
+        "name": "special events",
+        "func": "    let step = flow.get('step');\n    let client = new bacnet.default({\n        apduTimeout: 2000,\n        broadcastAddress: flow.get('ipBroadcast'),\n        port: flow.get('port'),\n        maxSegments: bacnet.MaxSegmentsAccepted.SEGMENTS_65\n    });\n\n\n        switch (msg.payload)   \n        {\n\n                \n        default:\n        try {\n\n        const address = { address:flow.get('ip')+\":\"+flow.get('port')};\n        const value = await client.readProperty(\n            address,\n            { type: bacnet.ObjectType.SCHEDULE, instance: 5001 },\n            bacnet.PropertyIdentifier.EXCEPTION_SCHEDULE\n        );\n\n        node.warn('RAW VALUE: ' + JSON.stringify(value, null, 2));\n\n        const exceptions = (value.values[0]?.value) || [];\n\n        const result = exceptions.map((specialEvent, index) => {\n            // Inspecter chaque événement brut\n\n            // La structure peut être à un niveau différent selon le device/lib\n            const raw = specialEvent?.value ?? specialEvent;\n            const period = raw?.period ?? raw?.calendarEntry ?? raw;\n            const timeValues = (raw?.listOfTimeValues || raw?.timeValues || []).map(tv => ({\n                time: tv?.time,\n                value: tv?.value\n            }));\n        });\n\n    } catch (err) {\n        node.error('Erreur: ' + JSON.stringify(err, Object.getOwnPropertyNames(err)));\n    }    \n        break;\n\n        case (\"OK\"):\n\n            let temp = flow.get(\"tests\");\n            temp.special_events = true;\n            flow.set(\"tests\", temp);\n            step++;\n            flow.set('step',step);\n            return [msg, null];\n        break;\n        case (\"NOK\"):\n            step++;\n            flow.set('step',step);\n            return [msg, null];\n        break;\n        case (\"SKIP\"):\n            step++;\n            flow.set('step',step);\n            return [msg, null];\n        break;\n    }\n\n\n\n  function bacnettimeConverter(bacnetTime) {\n        let time = \"\";\n        for (let i = 16; i < 24; i++) {\n\n            time += bacnetTime.toString()[i];\n\n        }\n        var bacnetFullTime =  time;\n        return bacnetFullTime;\n    }",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [
+            {
+                "var": "bacnet",
+                "module": "@bacnet-js/client"
+            }
+        ],
+        "x": 420,
+        "y": 380,
+        "wires": [
+            [
+                "2dcda73e51c938e2"
+            ]
+        ]
+    },
+    {
+        "id": "e129e2a083baae01",
+        "type": "function",
+        "z": "8b7d06cf1eb39e35",
+        "name": "4G with WiFi acces point",
+        "func": "let step = flow.get('step');\nstep++;\nflow.set('step',step);\nreturn msg;",
+        "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 150,
-        "y": 340,
+        "x": 890,
+        "y": 480,
         "wires": [
             [
-                "f26b2cdf2897e850"
-            ],
-            [
-                "298077ef917bc4e4"
+                "18558b2df522dc49"
             ]
         ]
     },
     {
-        "id": "46e019e2cfaabe93",
-        "type": "http request",
+        "id": "7d27094bf2815fcb",
+        "type": "link out",
         "z": "8b7d06cf1eb39e35",
-        "name": "",
-        "method": "GET",
-        "ret": "obj",
-        "paytoqs": "ignore",
-        "url": "http://192.168.1.106",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": false,
-        "headers": [],
-        "x": 550,
-        "y": 260,
-        "wires": [
-            [
-                "1cb1e03415431f1d",
-                "74b405e167ba5d9a"
-            ]
-        ]
-    },
-    {
-        "id": "1cb1e03415431f1d",
-        "type": "debug",
-        "z": "8b7d06cf1eb39e35",
-        "name": "debug 3",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "true",
-        "targetType": "full",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 880,
-        "y": 180,
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 625,
+        "y": 520,
         "wires": []
     },
     {
-        "id": "74b405e167ba5d9a",
-        "type": "html",
+        "id": "c186a1a9bcaca7f8",
+        "type": "function",
         "z": "8b7d06cf1eb39e35",
-        "name": "",
-        "property": "payload",
-        "outproperty": "payload",
-        "tag": "sol",
-        "ret": "html",
-        "as": "single",
-        "chr": "_",
-        "x": 730,
-        "y": 260,
+        "name": "muti state values light state",
+        "func": "let step = flow.get('step');\nstep++;\nflow.set('step',step);\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 520,
         "wires": [
             [
-                "7b4a1641311915d4",
-                "298077ef917bc4e4"
+                "7d27094bf2815fcb"
             ]
         ]
     },
     {
-        "id": "7b4a1641311915d4",
-        "type": "debug",
+        "id": "b1f8f76ccdd2dee5",
+        "type": "function",
         "z": "8b7d06cf1eb39e35",
-        "name": "debug 4",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "true",
-        "targetType": "full",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 1080,
-        "y": 300,
+        "name": "FRAM",
+        "func": "let step = flow.get('step');\nstep++;\nflow.set('step',step);\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 390,
+        "y": 480,
+        "wires": [
+            [
+                "05343baf24dfdf5e"
+            ]
+        ]
+    },
+    {
+        "id": "05343baf24dfdf5e",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "Next step",
+        "mode": "link",
+        "links": [
+            "27bdb4d6632ee748",
+            "a7675778e0a12091"
+        ],
+        "x": 485,
+        "y": 480,
         "wires": []
     },
     {
@@ -1161,7 +1416,7 @@
         }
     },
     {
-        "id": "cc66d78e5fc8d536",
+        "id": "e5689f4a51238c66",
         "type": "global-config",
         "env": [],
         "modules": {
