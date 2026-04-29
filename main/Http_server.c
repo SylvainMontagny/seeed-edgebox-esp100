@@ -62,7 +62,7 @@ void http_trendlog_record(float av0, float av1)
     if (s_tl_count < TL_HIST_MAX) s_tl_count++;
 
     xSemaphoreGive(s_tl_mutex);
-    ESP_LOGI("http_srv", "[TL] Point enregistré %s/%s AV0=%.1f AV1=%.1f",
+    ESP_LOGI("http_srv", "[TL] Point enregistré %s/%s AV0=%.1f AV1=%.1f",Rennes
              e->date_str, e->time_str, av0, av1);
 }
 
@@ -129,7 +129,7 @@ static const char HTML_PAGE[] =
 "<div class='stat'><span class='stat-label'>Zone B (AV1)</span><span class='stat-value' id='av1'>--%</span></div>"
 "<div class='stat'><span class='stat-label'>Source active</span><span class='stat-value' id='src'>--</span></div>"
 "<div class='stat'><span class='stat-label'>Etat nuit/jour</span><span id='night-badge' class='badge'>--</span></div>"
-"<div class='stat'><span class='stat-label'>Lever / Coucher</span><span class='stat-value' id='sun-times'>--</span></div>"
+"<div class='stat'><span class='stat-label'>Lever / Coucher</span><sol><span class='stat-value' id='sun-times'>--</span></sol></div>"
 "<div class='stat'><span class='stat-label'>Solaire</span><span class='stat-value' id='solar-status'>--</span></div>"
 "</div>"
 "<div class='card'><h2>Forcage manuel</h2>"
