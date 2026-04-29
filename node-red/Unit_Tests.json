@@ -63,7 +63,7 @@
         "finalize": "",
         "libs": [],
         "x": 610,
-        "y": 200,
+        "y": 280,
         "wires": [
             [
                 "8751f7813b84f7a0"
@@ -88,7 +88,7 @@
             }
         ],
         "x": 440,
-        "y": 340,
+        "y": 400,
         "wires": [
             [
                 "885c0316ccae1346"
@@ -111,7 +111,7 @@
         "finalize": "",
         "libs": [],
         "x": 400,
-        "y": 440,
+        "y": 480,
         "wires": [
             [
                 "86c2f580b01702c3"
@@ -390,7 +390,8 @@
         "name": "link in instructions",
         "links": [
             "e9a70ca434d50595",
-            "bfcdae28443c3b9f"
+            "bfcdae28443c3b9f",
+            "a02ebeb77f392b74"
         ],
         "x": 905,
         "y": 60,
@@ -563,7 +564,7 @@
         "timer": "20",
         "inputs": 1,
         "x": 410,
-        "y": 200,
+        "y": 280,
         "wires": [
             [
                 "75a95b66c42487f0"
@@ -619,7 +620,7 @@
             "d0d2f6f6da733d09"
         ],
         "x": 585,
-        "y": 360,
+        "y": 420,
         "wires": []
     },
     {
@@ -640,7 +641,7 @@
             }
         ],
         "x": 410,
-        "y": 260,
+        "y": 320,
         "wires": [
             [
                 "5ba630764cac92b1"
@@ -667,7 +668,7 @@
         "senderr": false,
         "headers": [],
         "x": 410,
-        "y": 300,
+        "y": 360,
         "wires": [
             [
                 "64dd42254d9e9bb3"
@@ -819,7 +820,6 @@
             "1f955fcc6047b0a2",
             "2dcda73e51c938e2",
             "5ba630764cac92b1",
-            "5cab1d853519b253",
             "64b6334bfa6a05e5",
             "7d0299fbde334ed8",
             "7d27094bf2815fcb",
@@ -828,7 +828,6 @@
             "885c0316ccae1346",
             "e6f0b3813cb76e48",
             "edb758cff2621840",
-            "f19f1d9f1e044a7c",
             "05343baf24dfdf5e"
         ],
         "x": 85,
@@ -865,7 +864,7 @@
             "a7675778e0a12091"
         ],
         "x": 535,
-        "y": 380,
+        "y": 440,
         "wires": []
     },
     {
@@ -935,7 +934,7 @@
             "a7675778e0a12091"
         ],
         "x": 505,
-        "y": 440,
+        "y": 480,
         "wires": []
     },
     {
@@ -949,7 +948,7 @@
             "a7675778e0a12091"
         ],
         "x": 585,
-        "y": 340,
+        "y": 400,
         "wires": []
     },
     {
@@ -963,7 +962,7 @@
             "a7675778e0a12091"
         ],
         "x": 535,
-        "y": 240,
+        "y": 300,
         "wires": []
     },
     {
@@ -977,7 +976,7 @@
             "a7675778e0a12091"
         ],
         "x": 765,
-        "y": 200,
+        "y": 280,
         "wires": []
     },
     {
@@ -991,7 +990,7 @@
             "a7675778e0a12091"
         ],
         "x": 705,
-        "y": 300,
+        "y": 360,
         "wires": []
     },
     {
@@ -1108,7 +1107,7 @@
             "d0d2f6f6da733d09"
         ],
         "x": 535,
-        "y": 260,
+        "y": 320,
         "wires": []
     },
     {
@@ -1168,7 +1167,6 @@
             "1f955fcc6047b0a2",
             "2dcda73e51c938e2",
             "5ba630764cac92b1",
-            "5cab1d853519b253",
             "64b6334bfa6a05e5",
             "7d0299fbde334ed8",
             "7d27094bf2815fcb",
@@ -1177,7 +1175,6 @@
             "885c0316ccae1346",
             "e6f0b3813cb76e48",
             "edb758cff2621840",
-            "f19f1d9f1e044a7c",
             "05343baf24dfdf5e"
         ],
         "x": 835,
@@ -1206,7 +1203,7 @@
             }
         ],
         "x": 580,
-        "y": 300,
+        "y": 360,
         "wires": [
             [
                 "e6f0b3813cb76e48"
@@ -1218,8 +1215,8 @@
         "type": "function",
         "z": "8b7d06cf1eb39e35",
         "name": "special events",
-        "func": "    let step = flow.get('step');\n    let client = new bacnet.default({\n        apduTimeout: 2000,\n        broadcastAddress: flow.get('ipBroadcast'),\n        port: flow.get('port'),\n        maxSegments: bacnet.MaxSegmentsAccepted.SEGMENTS_65\n    });\n\n\n        switch (msg.payload)   \n        {\n\n                \n        default:\n        try {\n\n        const address = { address:flow.get('ip')+\":\"+flow.get('port')};\n        const value = await client.readProperty(\n            address,\n            { type: bacnet.ObjectType.SCHEDULE, instance: 5001 },\n            bacnet.PropertyIdentifier.EXCEPTION_SCHEDULE\n        );\n\n        node.warn('RAW VALUE: ' + JSON.stringify(value, null, 2));\n\n        const exceptions = (value.values[0]?.value) || [];\n\n        const result = exceptions.map((specialEvent, index) => {\n            // Inspecter chaque événement brut\n\n            // La structure peut être à un niveau différent selon le device/lib\n            const raw = specialEvent?.value ?? specialEvent;\n            const period = raw?.period ?? raw?.calendarEntry ?? raw;\n            const timeValues = (raw?.listOfTimeValues || raw?.timeValues || []).map(tv => ({\n                time: tv?.time,\n                value: tv?.value\n            }));\n        });\n\n    } catch (err) {\n        node.error('Erreur: ' + JSON.stringify(err, Object.getOwnPropertyNames(err)));\n    }    \n        break;\n\n        case (\"OK\"):\n\n            let temp = flow.get(\"tests\");\n            temp.special_events = true;\n            flow.set(\"tests\", temp);\n            step++;\n            flow.set('step',step);\n            return [msg, null];\n        break;\n        case (\"NOK\"):\n            step++;\n            flow.set('step',step);\n            return [msg, null];\n        break;\n        case (\"SKIP\"):\n            step++;\n            flow.set('step',step);\n            return [msg, null];\n        break;\n    }\n\n\n\n  function bacnettimeConverter(bacnetTime) {\n        let time = \"\";\n        for (let i = 16; i < 24; i++) {\n\n            time += bacnetTime.toString()[i];\n\n        }\n        var bacnetFullTime =  time;\n        return bacnetFullTime;\n    }",
-        "outputs": 1,
+        "func": "    let step = flow.get('step');\n    let client = new bacnet.default({\n        apduTimeout: 2000,\n        broadcastAddress: flow.get('ipBroadcast'),\n        port: flow.get('port'),\n        maxSegments: bacnet.MaxSegmentsAccepted.SEGMENTS_65\n    });\n\n\n            switch (msg.payload)   \n            {\n\n                \n                default:\n                    try \n                    {\n                    const address = { address:flow.get('ip')+\":\"+flow.get('port')};\n                    const value = await client.readProperty(\n                        address,\n                        { type: bacnet.ObjectType.SCHEDULE, instance: 0},\n                        bacnet.PropertyIdentifier.EXCEPTION_SCHEDULE\n                    );\n                    node.warn(value);\n                    node.warn(value.values[0].value.length);\n                        node.warn(value.values[0].value[1].events[1].time.value);\n                    let eventsdates = \"\";\n                    for (let i = 0; i < value.values[0].value.length ;i++)\n                    {\n                        let year = value.values[0].value[1].date.raw.year  + 1900;\n                        let month = value.values[0].value[1].date.raw.month;\n                        let day = value.values[0].value[1].date.raw.day;\n                        eventsdates += 'special event ' + i + ' : ' + year + '/' + month + '/'+ day + ' from ' + bacnettimeConverter(value.values[0].value[i].events[0].time.value) + ' to ' + bacnettimeConverter(value.values[0].value[i].events[1].time.value);\n                    }\n                    \n\n                    msg.payload = 'Are the special event correct? \\n Press OK/NOT OK. \\n' + eventsdates\n                    node.send([null, msg]);\n                } catch (err) {\n                    node.error('Erreur: ' + JSON.stringify(err, Object.getOwnPropertyNames(err)));\n                }\n                \n    \n            break;\n        case (\"OK\"):\n            let temp = flow.get(\"tests\");\n            temp.special_events = true;\n            msg.payload = \"START\";\n            flow.set(\"tests\", temp);\n            step++;\n            flow.set('step',step);\n            return [msg, null];\n            break;\n        case (\"NOK\"):\n            step++;\n            flow.set('step',step);\n             msg.payload = \"START\";\n            return [msg, null];\n            break;\n        case (\"SKIP\"):\n            step++;\n            flow.set('step',step);\n            msg.payload = \"START\";\n            return [msg, null];\n            break;\n    }\n\n\n\nfunction bacnettimeConverter(bacnetTime) {\n        let time = \"\";\n        for (let i = 16; i < 24; i++) {\n\n            time += bacnetTime.toString()[i];\n\n        }\n        var bacnetFullTime =  time;\n        return bacnetFullTime;\n    }\n\n",
+        "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
@@ -1231,10 +1228,13 @@
             }
         ],
         "x": 420,
-        "y": 380,
+        "y": 440,
         "wires": [
             [
                 "2dcda73e51c938e2"
+            ],
+            [
+                "a02ebeb77f392b74"
             ]
         ]
     },
@@ -1269,7 +1269,7 @@
             "a7675778e0a12091"
         ],
         "x": 625,
-        "y": 520,
+        "y": 560,
         "wires": []
     },
     {
@@ -1285,7 +1285,7 @@
         "finalize": "",
         "libs": [],
         "x": 460,
-        "y": 520,
+        "y": 560,
         "wires": [
             [
                 "7d27094bf2815fcb"
@@ -1305,7 +1305,7 @@
         "finalize": "",
         "libs": [],
         "x": 390,
-        "y": 480,
+        "y": 520,
         "wires": [
             [
                 "05343baf24dfdf5e"
@@ -1323,7 +1323,20 @@
             "a7675778e0a12091"
         ],
         "x": 485,
-        "y": 480,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "a02ebeb77f392b74",
+        "type": "link out",
+        "z": "8b7d06cf1eb39e35",
+        "name": "link out RTC instructions",
+        "mode": "link",
+        "links": [
+            "d0d2f6f6da733d09"
+        ],
+        "x": 535,
+        "y": 460,
         "wires": []
     },
     {
@@ -1416,7 +1429,7 @@
         }
     },
     {
-        "id": "e5689f4a51238c66",
+        "id": "e339cf0bb591c4c6",
         "type": "global-config",
         "env": [],
         "modules": {
