@@ -21,3 +21,6 @@ N - Procédure de test
 N - Dossier de fabriquation?
 
 N - Ajout fonctionnalités futures...
+
+ephemeride  flag
+analog value offset 

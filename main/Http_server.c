@@ -62,8 +62,7 @@ void http_trendlog_record(float av0, float av1)
     if (s_tl_count < TL_HIST_MAX) s_tl_count++;
 
     xSemaphoreGive(s_tl_mutex);
-    ESP_LOGI("http_srv", "[TL] Point enregistré %s/%s AV0=%.1f AV1=%.1f",Rennes
-             e->date_str, e->time_str, av0, av1);
+    ESP_LOGI("http_srv", "[TL] Point enregistré %s/%s AV0=%.1f AV1=%.1f", e->date_str, e->time_str, av0, av1);
 }
 
 static const char *TAG = "http_srv";
