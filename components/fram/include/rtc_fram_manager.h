@@ -20,6 +20,7 @@
 
 #include "esp_err.h"
 #include "fram_layout.h"
+
 #include <stdbool.h>
 
 /* ─────────────────────────────────────────────────────────────

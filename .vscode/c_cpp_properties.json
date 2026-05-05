@@ -1,0 +1,35 @@
+{
+    "configurations": [
+        {
+            "name": "ESP-IDF",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "includePath": [
+                "${workspaceFolder}/components/rtc/include",
+                "${workspaceFolder}/components/**/include",
+                "C:/esp/v5.5.4/esp-idf/components/driver/i2c/include",
+                "C:/esp/v5.5.4/esp-idf/components/esp_common/include",
+                "C:/esp/v5.5.4/esp-idf/components/freertos/FreeRTOS-Kernel/include",
+                "C:/esp/v5.5.4/esp-idf/components/esp_system/include",
+                "C:/esp/v5.5.4/esp-idf/components/esp_event/include",
+                "C:/esp/v5.5.4/esp-idf/components/esp_wifi/include",
+                "C:/esp/v5.5.4/esp-idf/components/esp_netif/include",
+                "C:/esp/v5.5.4/esp-idf/components/esp_http_server/include"
+            ],
+            "defines": [
+                "ARDUINO=0"
+            ],
+            "intelliSenseMode": "windows-gcc-x64",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "${workspaceFolder}/components",
+                    "C:/esp/v5.5.4/esp-idf/components"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}

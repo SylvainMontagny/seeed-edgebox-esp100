@@ -43,7 +43,7 @@
 #include <time.h>
 #include "rtc_fram_manager.h"
 #include "schedule_persist.h"
-#include "Solar.h"
+#include "solar.h"
 #include "Http_server.h"
 #include "wifi.h"
 

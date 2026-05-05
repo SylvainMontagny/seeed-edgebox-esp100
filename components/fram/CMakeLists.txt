@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
-        
-    INCLUDE_DIRS "." "include" "../../main"  
-    REQUIRES esp_netif esp_event lwip driver esp_wifi
+        "src/rtc_fram_manager.c" "src/fram_fm24cl64b.c" 
+    INCLUDE_DIRS 
+        "." "include" "../rtc/include" 
+    REQUIRES driver rtc
 )

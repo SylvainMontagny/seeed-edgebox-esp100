@@ -1,0 +1,190 @@
+[
+    {
+        "id": "c358feeeb7f6620f",
+        "type": "tab",
+        "label": "Intermitence ADE bacnet",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "f1ccfcf63b9958a9",
+        "type": "ical-upcoming",
+        "z": "c358feeeb7f6620f",
+        "confignode": "f73555ac13078ac6",
+        "timeout": "",
+        "timeoutUnits": "seconds",
+        "cron": "",
+        "name": "Get Room calendar",
+        "offsettype": "",
+        "offset": "",
+        "offsetUnitstype": "",
+        "offsetUnits": "",
+        "eventtypes": "events",
+        "eventtypestype": "eventtypes",
+        "calendar": "",
+        "calendartype": "str",
+        "triggertype": "trigger",
+        "trigger": "always",
+        "timezone": "",
+        "timezonetype": "str",
+        "dateformat": "{ \"timeStyle\": \"short\", \"dateStyle\": \"short\" }",
+        "dateformattype": "json",
+        "language": "en",
+        "languagetype": "language",
+        "filterProperty": "summary",
+        "filterPropertytype": "filterProperty",
+        "filterOperator": "between",
+        "filterOperatortype": "filterOperator",
+        "filtertype": "str",
+        "filter2type": "str",
+        "filter2": "",
+        "filter": "",
+        "checkall": false,
+        "endpreview": "",
+        "endpreviewUnits": "",
+        "previewtype": "num",
+        "preview": "20",
+        "previewUnitstype": "previewUnits",
+        "previewUnits": "days",
+        "pastviewtype": "num",
+        "pastview": "0",
+        "pastviewUnits": "days",
+        "pastviewUnitstype": "pastviewUnits",
+        "x": 210,
+        "y": 120,
+        "wires": [
+            [
+                "d4565f5715020f12"
+            ]
+        ]
+    },
+    {
+        "id": "d4565f5715020f12",
+        "type": "function",
+        "z": "c358feeeb7f6620f",
+        "name": "bacnet_client_ExceptionWrite",
+        "func": "\n\nconst client = new bacnet.default({ apduTimeout: 10000, broadcastAddress: flow.get('ipBroadcast') });       \n\nclient.on('error', (err) => {\n    node.error('Erreur client: ' + err.message);\n    client.close();\n});\n\nconst address = { address:flow.get('ip')+\":\"+flow.get('port')};\nlet schedules = flow.get('schedulesParameters');\nlet events = msg.payload;\n\nfor( j = 0; j<schedules.length;++ ){\n\nfor(let i = 0;i< msg.payload.length;i++)\n{   \n    var date = msg.payload[i].eventStart;\n    var timestart = msg.payload[i].eventStart;\n    var timeend = msg.payload[i].eventEnd;\n\n   \n    \n\n    const exceptionSchedule = [\n    {\n        date: {\n            type: 10,                        // ApplicationTag.DATE\n            value: date\n        },\n        events: [\n            {\n                time: {\n                    type: 11,                // ApplicationTag.TIME\n                    value: timestart,\n                },\n                value: { type: 4, value: 1.0 },  // ApplicationTag.REAL\n            },\n            {\n                time: {\n                    type: 11,\n                    value: timeend,\n                },\n                value: { type: 4, value: 0.0 },\n            },\n        ],\n        priority: { type: 2, value: 16 },   // ApplicationTag.UNSIGNED_INTEGER\n    }\n];\n\nasync function main() {\n    try {\n        await client.writeProperty(\n            address,\n            { type: bacnet.ObjectType.SCHEDULE, instance: 10 },\n            bacnet.PropertyIdentifier.EXCEPTION_SCHEDULE,\n            exceptionSchedule,\n            {}\n        );\n        node.warn(exceptionSchedule);\n        node.warn('Écriture EXCEPTION_SCHEDULE réussie');\n        node.send({ payload: 'OK' });\n    } catch (err) {\n        node.error('Erreur: ' + JSON.stringify(err, Object.getOwnPropertyNames(err)));\n    } finally {\n        client.close();\n    }\n}\n\nmain();\nreturn null;\n}\n}\n\n\n\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 4,
+        "initialize": "",
+        "finalize": "",
+        "libs": [
+            {
+                "var": "bacnet",
+                "module": "@bacnet-js/client"
+            }
+        ],
+        "x": 470,
+        "y": 120,
+        "wires": [
+            [
+                "4aba7866e108822d"
+            ]
+        ]
+    },
+    {
+        "id": "4aba7866e108822d",
+        "type": "debug",
+        "z": "c358feeeb7f6620f",
+        "name": "debug ",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 690,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "e0c26c0fe43029e0",
+        "type": "function",
+        "z": "c358feeeb7f6620f",
+        "name": "TO CONFIGURE",
+        "func": "flow.set('ip', \"192.168.1.109\");\nflow.set('port', \"47808\");\nflow.set('ipBroadcast', \"192.168.1.255\");\nflow.set('sourcePort',\"48809\");\nflow.set('UTCoffset',\"2\");\nflow.set('schedulesParameters',\n[\n{  \n    url : \"\",\n    scheduleid : \"\",\n    targetip : \"\",\n    exeptionvalue : \"\"\n},\n{  \n    url : \"\",\n    scheduleid : \"\",\n    targetip : \"\",\n    exeptionvalue: \"\"\n},\n{  \n    url : \"\",\n    scheduleid : \"\",\n    targetip : \"\",\n    exeptionvalue: \"\"\n}\n])\n\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 210,
+        "y": 40,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "eb608610896c8f1e",
+        "type": "inject",
+        "z": "c358feeeb7f6620f",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "true",
+        "payloadType": "bool",
+        "x": 65,
+        "y": 40,
+        "wires": [
+            [
+                "e0c26c0fe43029e0"
+            ]
+        ],
+        "l": false
+    },
+    {
+        "id": "04df7711a3ebac0f",
+        "type": "inject",
+        "z": "c358feeeb7f6620f",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "0.5",
+        "topic": "",
+        "payload": "true",
+        "payloadType": "bool",
+        "x": 65,
+        "y": 120,
+        "wires": [
+            [
+                "f1ccfcf63b9958a9"
+            ]
+        ],
+        "l": false
+    },
+    {
+        "id": "f73555ac13078ac6",
+        "type": "ical-config",
+        "url": "https://ade-usmb-ro.grenet.fr/jsp/custom/modules/plannings/direct_cal.jsp?data=b5cfb898a9c27be94975c12c6eb30e9233bdfae22c1b52e2cd88eb944acf5364c69e3e5921f4a6ebe36e93ea9658a08f,1&resources=4946&projectId=5&calType=ical&lastDate=2026-08-14",
+        "caldav": "",
+        "caltype": "ical",
+        "name": "",
+        "replacedates": false,
+        "usecache": false,
+        "username": "",
+        "password": "",
+        "experimental": false,
+        "calendar": "",
+        "pastWeeks": "0",
+        "futureWeeks": "4"
+    }
+]

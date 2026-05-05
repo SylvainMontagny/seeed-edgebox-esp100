@@ -1,17 +1,8 @@
 idf_component_register(
     SRCS
         "main.c"
-        "client_task.c"
-        "server_task.c"
-        "wifi.c"
-        "led.c"
-        "rtc_pcf8563.c"
-        "fram_fm24cl64b.c"
-        "rtc_fram_manager.c"
-        "Solar.c"
-        "Http_server.c"
     INCLUDE_DIRS
-        "."
+        "." "../components/led/include" "../components/bacnetclient/include" "../components/httpserver/include" "../components/solar/include" "../components/fram/include" "../components/rtc/include"
     REQUIRES
         esp_driver_spi
         esp_wifi
@@ -21,7 +12,15 @@ idf_component_register(
         driver
         esp_event
         bacnet
+        bacnetclient
+        bacnetserver
         esp_modem
         esp_http_server
         json
+        led
+        wifi
+        fram
+        rtc
+        solar
+        httpserver
 )

@@ -6,9 +6,6 @@
 #include <string.h>
 #include <time.h>
 
-/* ★ Décommenter pour activer le mode test (cycle 2 min) */
-#define SOLAR_TEST_MODE
-
 static const char *TAG = "solar";
 #define PI         3.14159265358979323846
 #define D2R(x)     ((x)*PI/180.0)
@@ -104,21 +101,7 @@ bool solar_is_night_now(void)
 {
     if(!s_cfg.enabled)return false;
 
-#ifdef SOLAR_TEST_MODE
-    /* MODE TEST — cycle 1 minute
-     * sec 0-29 = NUIT (100%) | sec 30-59 = JOUR (0%)
-     * Commenter #define SOLAR_TEST_MODE pour la production */
-    time_t now_t=time(NULL); struct tm *tt=localtime(&now_t);
-    /* Cycle 1 minute : sec 0-29 = NUIT, sec 30-59 = JOUR */
-   int cycle_sec = (tt->tm_min % 10) * 60 + tt->tm_sec;
-bool is_night_test = (cycle_sec < 300); // 0-299s = NUIT, 300-599s = JOUR
-if (tt->tm_sec == 0 && (tt->tm_min % 5 == 0)) {
-        ESP_LOGI("solar", "[TEST] %02d:%02d:%02d → %s",
-                 tt->tm_hour, tt->tm_min, tt->tm_sec,
-                 is_night_test ? "NUIT" : "JOUR");
-    }
-    return is_night_test;
-#else
+
     solar_times_t st=solar_get_today();
     if(!st.valid)return false;
     time_t now=time(NULL); struct tm *t=localtime(&now);
@@ -127,7 +110,7 @@ if (tt->tm_sec == 0 && (tt->tm_min % 5 == 0)) {
     int sr =st.sunrise_h*60+st.sunrise_m;
     if(ss>sr) return(cur>=ss||cur<sr);
     else      return(cur>=ss&&cur<sr);
-#endif
+
 }
 
 esp_err_t solar_save_config(const solar_config_t *cfg)

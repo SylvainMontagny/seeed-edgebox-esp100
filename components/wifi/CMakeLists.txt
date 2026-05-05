@@ -1,6 +1,26 @@
 idf_component_register(
     SRCS
-        
-    INCLUDE_DIRS "." "include" "../../main"  
-    REQUIRES esp_netif esp_event lwip driver esp_wifi
+        "src/wifi.c"
+    INCLUDE_DIRS 
+        "." "include"
+    REQUIRES 
+        esp_driver_spi
+        esp_wifi
+        esp_netif
+        lwip
+        nvs_flash
+        driver
+        esp_event
+        bacnet
+        bacnetclient
+        bacnetserver
+        esp_modem
+        esp_http_server
+        json
+        led
+        wifi
+        fram
+        rtc
+        solar
+        httpserver
 )

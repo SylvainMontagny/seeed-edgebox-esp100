@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
-        
-    INCLUDE_DIRS "." "include" "../../main"  
-    REQUIRES esp_netif esp_event lwip driver esp_wifi
+        "src/solar.c"
+    INCLUDE_DIRS 
+        "." "include" "../fram/include"
+    REQUIRES driver fram
 )
