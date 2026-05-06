@@ -14,13 +14,16 @@ idf_component_register(
         bacnet
         bacnetclient
         bacnetserver
+        fram
+        gpiooutputs
         esp_modem
+        modem
         esp_http_server
+        httpserver
         json
         led
-        wifi
-        fram
         rtc
         solar
-        httpserver
+        wifi
+        
 )

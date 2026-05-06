@@ -1,4 +1,4 @@
-menu "Example Configuration"
+menu "Configuration"
 
     orsource "$IDF_PATH/examples/common_components/env_caps/$IDF_TARGET/Kconfig.env_caps"
 
@@ -19,7 +19,12 @@ menu "Example Configuration"
                 Use 4G/LTE modem (SIM7600) for network connection
 
     endchoice
-
+    config  MODEM_APN
+        string "Modem APN"
+        default "apn" if NETWORK_CONNECTION_4G
+        help
+            APN for 4G/LTE modem connection 
+        
     choice LED_TYPE
         prompt "LED type"
         default LED_TYPE_GPIO if IDF_TARGET_ESP32 || IDF_TARGET_ESP32C2
