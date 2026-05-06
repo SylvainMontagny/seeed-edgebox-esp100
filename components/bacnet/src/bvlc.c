@@ -731,7 +731,7 @@ static bool bvlc_register_foreign_device(
                    a BBMD shall start a timer with a value equal to the
                    Time-to-Live parameter supplied plus a fixed grace
                    period of 30 seconds. */
-                FD_Table[i].seconds_remaining = time_to_live + 900;
+                FD_Table[i].seconds_remaining = time_to_live + 30;
                 break;
             }
         }
@@ -742,7 +742,7 @@ static bool bvlc_register_foreign_device(
                 FD_Table[i].dest_address.s_addr = sin->sin_addr.s_addr;
                 FD_Table[i].dest_port = sin->sin_port;
                 FD_Table[i].time_to_live = time_to_live;
-                FD_Table[i].seconds_remaining = time_to_live + 900;
+                FD_Table[i].seconds_remaining = time_to_live + 30;
                 FD_Table[i].valid = true;
                 status = true;
                 break;

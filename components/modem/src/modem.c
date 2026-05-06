@@ -86,7 +86,7 @@ static void ping_task(void *pvParameters)
     esp_ping_config_t config = ESP_PING_DEFAULT_CONFIG();
     config.target_addr     = target_addr;
     config.count           = ESP_PING_COUNT_INFINITE;
-    config.interval_ms     = 30000;   /* toutes les 30s */
+    config.interval_ms     = 1800000;   /* toutes les 30 min  */
     config.timeout_ms      = 5000;
     config.task_stack_size = 4096;
     config.task_prio       = 1;
@@ -100,7 +100,7 @@ static void ping_task(void *pvParameters)
     if (err != ESP_OK) { vTaskDelete(NULL); return; }
     esp_ping_start(g_ping_handle);
     ESP_LOGI(TAG, "[PING] Demarre → 8.8.8.8 toutes les 30s");
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(60000)); }
+    for (;;) { vTaskDelay(pdMS_TO_TICKS(3600000)); }
 }
 
 void modem_start_ping_task(void)

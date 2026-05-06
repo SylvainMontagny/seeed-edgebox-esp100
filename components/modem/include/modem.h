@@ -8,8 +8,6 @@
 #include "ping/ping_sock.h"
 
 // External variables from main.c
-// (removed ping globals as they are now in modem.c)
-
 #define MODEM_TX_PIN   48
 #define MODEM_RX_PIN   47
 #define MODEM_PWR_KEY  21
