@@ -197,7 +197,7 @@ bool modem_initialize(void)
 /* ================================================================
  * Tâche de reconnexion automatique pour 4G
  *
- * - Toutes les 30s : vérifie l'état (ping déjà géré par ping_task)
+ * - Toutes les 1800s : vérifie l'état (ping déjà géré par ping_task)
  * - Si g_link_lost : attend 2 minutes puis tente modem_try_once()
  * - Si succès : NTP + I_Am BACnet → reprend normalement
  * ================================================================ */
@@ -259,13 +259,13 @@ void modem_reconnect_task(void *pvParameters)
     ESP_LOGI(TAG, "[RECONNECT] Surveillance connexion active");
 
     for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(30000));   /* check toutes les 30s */
+        vTaskDelay(pdMS_TO_TICKS(1800000));  /* check toutes les 30 min */
 
-        if (!g_link_lost) continue;         /* tout va bien */
+        if (!g_link_lost) continue;       
 
         /* Connexion perdue — attendre 2 minutes avant de retenter */
         ESP_LOGW(TAG, "[RECONNECT] Connexion perdue — attente 2 min avant retentative...");
-        vTaskDelay(pdMS_TO_TICKS(120000));  /* 2 minutes */
+        vTaskDelay(pdMS_TO_TICKS(1800000));  /* 30 minutes */
 
         if (!g_link_lost) continue;         /* reconnecté entre-temps ? */
 
@@ -313,7 +313,8 @@ void modem_reconnect_task(void *pvParameters)
             }
 
             /* Relancer le ping */
-            if (g_ping_handle) {
+            if (g_ping_handle) 
+            {
                 esp_ping_start(g_ping_handle);
             }
 
@@ -324,8 +325,8 @@ void modem_reconnect_task(void *pvParameters)
             rfm_log_event(EVENT_NTP_SYNC, 0.0f, 0);
 
         } else {
-            ESP_LOGW(TAG, "[RECONNECT] ❌ Echec — nouvelle tentative dans 2 min");
-            /* g_link_lost reste true → la boucle retentera dans 2 min */
+            ESP_LOGW(TAG, "[RECONNECT] ❌ Echec — nouvelle tentative dans 30 min");
+            /* g_link_lost reste true → la boucle retentera dans 30 min */
         }
     }
 }

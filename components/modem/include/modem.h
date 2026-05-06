@@ -20,7 +20,7 @@ extern volatile bool g_bacnet_started;
 extern esp_netif_t *g_ppp_netif;
 extern esp_modem_dce_t *g_ppp_dce;
 
-// Ping-related globals (now defined in modem.c)
+// Ping-related globals 
 extern volatile int g_ping_fail_count;
 extern volatile bool g_link_lost;
 extern esp_ping_handle_t g_ping_handle;
@@ -28,6 +28,7 @@ extern esp_ping_handle_t g_ping_handle;
 // Function declarations
 bool modem_initialize(void);
 bool modem_try_once(void);
+void schedule_update_solar_times(void);
 void modem_reconnect_task(void *pvParameters);
 void modem_start_ping_task(void);
 

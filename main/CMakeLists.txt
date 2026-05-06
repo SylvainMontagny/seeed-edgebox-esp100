@@ -2,7 +2,7 @@ idf_component_register(
     SRCS
         "main.c"
     INCLUDE_DIRS
-        "." "../components/led/include" "../components/bacnetclient/include" "../components/httpserver/include" "../components/solar/include" "../components/fram/include" "../components/rtc/include"
+        "." "../components/NTP/include" "../components/led/include" "../components/bacnetclient/include" "../components/httpserver/include" "../components/solar/include" "../components/fram/include" "../components/rtc/include"
     REQUIRES
         esp_driver_spi
         esp_wifi
@@ -25,5 +25,8 @@ idf_component_register(
         rtc
         solar
         wifi
+        NTP
+        
+
         
 )

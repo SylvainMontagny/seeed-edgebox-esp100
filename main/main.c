@@ -46,6 +46,7 @@
 #include "Http_server.h"
 #include "wifi.h"
 #include "modem.h"
+#include "NTP.h"
 
 
 #define SERVER_DEVICE_ID 1234
@@ -116,56 +117,6 @@ void av_pwm_apply(uint32_t instance, float percent)
     }
 }
 
-/* ================================================================
- * Modification 1 : Remplir le Weekly Schedule avec les heures solaires
- *
- * Pour chaque jour (lundi=0 … dimanche=6) on programme :
- *   TV[0] = heure coucher soleil → 100.0 % (allumage)
- *   TV[1] = heure lever  soleil → 0.0 %   (extinction)
- *
- * Visible dans YABE → Schedule → Weekly Schedule
- * Mis à jour chaque matin à minuit (invalider cache → recalcul)
- * ================================================================ */
-static void schedule_update_solar_times(void)
-{
-    solar_times_t st = solar_get_today();
-    if (!st.valid) {
-        ESP_LOGW(TAG, "[SOLAR-SCH] Heures invalides — weekly non mis à jour");
-        return;
-    }
-
-    ESP_LOGI(TAG, "[SOLAR-SCH] Mise à jour Weekly : coucher %02d:%02d → 100%% | lever %02d:%02d → 0%%",
-             st.sunset_h, st.sunset_m, st.sunrise_h, st.sunrise_m);
-
-    for (int sch = 0; sch < 2; sch++) {
-        SCHEDULE_DESCR *desc = Schedule_Object((uint32_t)sch);
-        if (!desc) continue;
-
-        /* Remplir les 7 jours BACnet (index 0=Lundi … 6=Dimanche)
-         * BACNET_WEEKLY_SCHEDULE_SIZE peut être > 7 (défini à 10)
-         * On remplit seulement les 7 premiers slots (un par jour)    */
-        for (int day = 0; day < 7; day++) {
-            BACNET_DAILY_SCHEDULE *ds = &desc->Weekly_Schedule[day];
-            ds->TV_Count = 2;
-
-            /* Entrée 0 : coucher du soleil → allumage à 100% */
-            ds->Time_Values[0].Time.hour       = st.sunset_h;
-            ds->Time_Values[0].Time.min        = st.sunset_m;
-            ds->Time_Values[0].Time.sec        = 0;
-            ds->Time_Values[0].Time.hundredths = 0;
-            ds->Time_Values[0].Value.tag        = BACNET_APPLICATION_TAG_REAL;
-            ds->Time_Values[0].Value.type.Real  = 100.0f;
-
-            /* Entrée 1 : lever du soleil → extinction à 0% */
-            ds->Time_Values[1].Time.hour       = st.sunrise_h;
-            ds->Time_Values[1].Time.min        = st.sunrise_m;
-            ds->Time_Values[1].Time.sec        = 0;
-            ds->Time_Values[1].Time.hundredths = 0;
-            ds->Time_Values[1].Value.tag        = BACNET_APPLICATION_TAG_REAL;
-            ds->Time_Values[1].Value.type.Real  = 0.0f;
-        }
-    }
-}
 
 static void Init_Service_Handlers(void)
 {
@@ -188,44 +139,6 @@ static void Init_Service_Handlers(void)
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_PRIVATE_TRANSFER,         handler_unconfirmed_private_transfer);
 }
 
-static void ntp_sync_notification_cb(struct timeval *tv)
-{
-    time_t now = tv->tv_sec;
-    struct tm *t = localtime(&now);
-    ESP_LOGI(TAG, "[NTP] Synchronise — heure locale: %02d:%02d:%02d",
-             t->tm_hour, t->tm_min, t->tm_sec);
-    rfm_sync_rtc_from_ntp();
-    /* Recalculer les heures solaires après sync NTP */
-    solar_invalidate_cache();
-    schedule_update_solar_times();
-}
-
-void ntp_initialize(void)
-{
-    ESP_LOGI(TAG, "[NTP] Demarrage...");
-    setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
-    tzset();
-    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    esp_sntp_setservername(0,"pool.ntp.org");
-    esp_sntp_setservername(1,"time.google.com");
-    sntp_set_time_sync_notification_cb(ntp_sync_notification_cb);
-    esp_sntp_init();
-    int retry = 0;
-    time_t now = 0;
-    while (retry < 20) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        now = time(NULL);
-        if (now > 1000000000) {
-            struct tm *t = localtime(&now);
-            ESP_LOGI(TAG, "[NTP] OK — heure locale: %02d:%02d:%02d",
-                     t->tm_hour, t->tm_min, t->tm_sec);
-            return;
-        }
-        ESP_LOGI(TAG, "[NTP] Attente... (%d/20)", retry + 1);
-        retry++;
-    }
-    ESP_LOGW(TAG, "[NTP] Timeout");
-}
 
 static void reconnect_task(void *pvParameters)
 {
@@ -633,4 +546,5 @@ void app_main(void)
 #endif
 
     ESP_LOGI(TAG, "AV0 -> GPIO42 | AV1 -> GPIO41");
+
 }

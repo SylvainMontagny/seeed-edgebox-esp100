@@ -122,6 +122,6 @@ idf_component_register(
         "src/calendar.c"
         "src/schedule_persist.c"
     INCLUDE_DIRS 
-        "." "include" "../fram/include" "../led/include" 
+        "." "include" "../fram/include" "../led/include"  "../httpserver/include" "../solar/include" "../rtc/include" "../modem/include" "../NTP/include"
     REQUIRES esp_netif esp_event lwip driver esp_wifi led
 )

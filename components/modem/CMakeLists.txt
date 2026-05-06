@@ -1,7 +1,7 @@
 idf_component_register(
     SRCS "src/modem.c"
       INCLUDE_DIRS
-        "." "../../main/." "../led/include" "../bacnetclient/include" "../httpserver/include" "../solar/include" "../fram/include" "../rtc/include" "include"
+        "." "../../main/." "../led/include" "../bacnetclient/include" "../httpserver/include" "../solar/include" "../fram/include" "../rtc/include" "include" "../NTP/include"
     REQUIRES
         esp_driver_spi
         esp_wifi
@@ -24,4 +24,5 @@ idf_component_register(
         rtc
         solar
         wifi
+        NTP
 )
