@@ -7,7 +7,6 @@
 #include "driver/gpio.h"
 #include "ping/ping_sock.h"
 #include "server_task.h"
-#include "client_task.h"
 #include "client.h"
 #include "solar.h"
 #include "rtc_fram_manager.h"

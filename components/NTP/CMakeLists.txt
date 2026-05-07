@@ -1,8 +1,8 @@
 idf_component_register(
     SRCS
-        "src/NTP.c" 
+        "src/ntp.c" 
     INCLUDE_DIRS 
-        "." "include" "../led/include" "../bacnetclient/include" "../httpserver/include" "../solar/include" "../fram/include" "../rtc/include" "../modem/include" "../bacnet/include"
+        "." "include" "../led/include" "../httpserver/include" "../solar/include" "../fram/include" "../rtc/include" "../modem/include" "../bacnet/include"
     REQUIRES 
     driver 
     led_strip 

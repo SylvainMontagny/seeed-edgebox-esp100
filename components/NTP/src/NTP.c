@@ -1,4 +1,4 @@
-#include "NTP.h"
+#include "ntp.h"
 #include "esp_sntp.h"
 #include "esp_log.h"
 #include "rtc_fram_manager.h"

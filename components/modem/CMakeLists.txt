@@ -1,7 +1,7 @@
 idf_component_register(
     SRCS "src/modem.c"
       INCLUDE_DIRS
-        "." "../../main/." "../led/include" "../bacnetclient/include" "../httpserver/include" "../solar/include" "../fram/include" "../rtc/include" "include" "../NTP/include"
+        "." "../../main/." "../led/include"  "../httpserver/include" "../solar/include" "../fram/include" "../rtc/include" "include" "../ntp/include"
     REQUIRES
         esp_driver_spi
         esp_wifi
@@ -11,7 +11,7 @@ idf_component_register(
         driver
         esp_event
         bacnet
-        bacnetclient
+ 
         bacnetserver
         fram
         gpiooutputs
@@ -24,5 +24,5 @@ idf_component_register(
         rtc
         solar
         wifi
-        NTP
+        ntp
 )

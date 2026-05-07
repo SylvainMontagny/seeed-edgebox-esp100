@@ -11,7 +11,6 @@
 #include "ping/ping_sock.h"
 #include "lwip/inet.h"
 #include "server_task.h"
-#include "client_task.h"
 #include "led.h"
 #include "device.h"
 #include "trendlog.h"
@@ -46,14 +45,13 @@
 #include "Http_server.h"
 #include "wifi.h"
 #include "modem.h"
-#include "NTP.h"
+#include "ntp.h"
 #include "gpiooutputs.h"
 
 
 #define SERVER_DEVICE_ID 1234
 static const char *TAG = "main";
-#define GPIO_AV0  GPIO_NUM_42
-#define GPIO_AV1  GPIO_NUM_41
+
 
 /* ================================================================
  * État connexion — partagé entre modem et reconnect_task
@@ -62,67 +60,6 @@ static const char *TAG = "main";
 /* Netif PPP — conservé pour pouvoir surveiller l'IP */
 
 extern esp_err_t http_server_start(void);
-
-static object_functions_t Object_Table[] = {
-    { OBJECT_DEVICE, NULL, Device_Count, Device_Index_To_Instance,
-      Device_Valid_Object_Instance_Number, Device_Object_Name,
-      Device_Read_Property_Local, Device_Write_Property_Local,
-      Device_Property_Lists, NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_ANALOG_VALUE, Analog_Value_Init, Analog_Value_Count,
-      Analog_Value_Index_To_Instance, Analog_Value_Valid_Instance,
-      Analog_Value_Object_Name, Analog_Value_Read_Property,
-      Analog_Value_Write_Property, Analog_Value_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_BINARY_VALUE, Binary_Value_Init, Binary_Value_Count,
-      Binary_Value_Index_To_Instance, Binary_Value_Valid_Instance,
-      Binary_Value_Object_Name, Binary_Value_Read_Property,
-      Binary_Value_Write_Property, Binary_Value_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_SCHEDULE, Schedule_Init, Schedule_Count,
-      Schedule_Index_To_Instance, Schedule_Valid_Instance,
-      Schedule_Object_Name, Schedule_Read_Property, Schedule_Write_Property,
-      (rpm_property_lists_function)Schedule_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_MULTI_STATE_VALUE, Multistate_Value_Init, Multistate_Value_Count,
-      Multistate_Value_Index_To_Instance, Multistate_Value_Valid_Instance,
-      Multistate_Value_Object_Name, Multistate_Value_Read_Property,
-      Multistate_Value_Write_Property, Multistate_Value_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_CALENDAR, Calendar_Init, Calendar_Count,
-      Calendar_Index_To_Instance, Calendar_Valid_Instance,
-      Calendar_Object_Name, Calendar_Read_Property, Calendar_Write_Property,
-      (rpm_property_lists_function)Calendar_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_TRENDLOG, Trend_Log_Init, Trend_Log_Count,
-      Trend_Log_Index_To_Instance, Trend_Log_Valid_Instance,
-      Trend_Log_Object_Name, Trend_Log_Read_Property, Trend_Log_Write_Property,
-      (rpm_property_lists_function)Trend_Log_Property_Lists,
-      TrendLogGetRRInfo, NULL, NULL, NULL, NULL, NULL },
-    { MAX_BACNET_OBJECT_TYPE, NULL, NULL, NULL, NULL, NULL,
-      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
-};
-
-
-static void Init_Service_Handlers(void)
-{
-    Device_Init(&Object_Table[0]);
-    apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_WHO_IS, handler_who_is);
-    apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_WHO_HAS, handler_who_has);
-    apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_I_AM, handler_i_am_bind);
-    apdu_set_unrecognized_service_handler_handler(handler_unrecognized_service);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_READ_PROPERTY,      handler_read_property);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_READ_PROP_MULTIPLE,  handler_read_property_multiple);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_WRITE_PROPERTY,     handler_write_property);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_WRITE_PROP_MULTIPLE, handler_write_property_multiple);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_READ_RANGE,         handler_read_range);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_REINITIALIZE_DEVICE, handler_reinitialize_device);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_SUBSCRIBE_COV,      handler_cov_subscribe);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_DEVICE_COMMUNICATION_CONTROL, handler_device_communication_control);
-    apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_UTC_TIME_SYNCHRONIZATION, handler_timesync_utc);
-    apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_TIME_SYNCHRONIZATION,     handler_timesync);
-    apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_COV_NOTIFICATION,         handler_ucov_notification);
-    apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_PRIVATE_TRANSFER,         handler_unconfirmed_private_transfer);
-}
 
 
 static void reconnect_task(void *pvParameters)
@@ -410,7 +347,8 @@ static bool network_initialize(void)
 void app_main(void)
 {
     esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES) {
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES) 
+    {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
@@ -418,28 +356,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     led_initialize();
-
-    ledc_timer_config_t ledc_timer = {
-        .speed_mode = LEDC_LOW_SPEED_MODE, .timer_num = LEDC_TIMER_0,
-        .duty_resolution = LEDC_TIMER_8_BIT, .freq_hz = 4000,
-        .clk_cfg = LEDC_AUTO_CLK
-    };
-    ledc_timer_config(&ledc_timer);
-
-    ledc_channel_config_t ledc_channel0 = {
-        .speed_mode = LEDC_LOW_SPEED_MODE, .channel = LEDC_CHANNEL_0,
-        .timer_sel  = LEDC_TIMER_0, .intr_type = LEDC_INTR_DISABLE,
-        .gpio_num   = GPIO_AV0, .duty = 0, .hpoint = 0
-    };
-    ledc_channel_config(&ledc_channel0);
-
-    ledc_channel_config_t ledc_channel1 = {
-        .speed_mode = LEDC_LOW_SPEED_MODE, .channel = LEDC_CHANNEL_1,
-        .timer_sel  = LEDC_TIMER_0, .intr_type = LEDC_INTR_DISABLE,
-        .gpio_num   = GPIO_AV1, .duty = 0, .hpoint = 0
-    };
-    ledc_channel_config(&ledc_channel1);
-
+    ledc_initialize();
     Device_Set_Object_Instance_Number(SERVER_DEVICE_ID);
     ESP_LOGI(TAG, "BACnet Stack %s | Device ID: %lu",
              BACnet_Version, (unsigned long)Device_Object_Instance_Number());

@@ -12,7 +12,7 @@ idf_component_register(
         driver
         esp_event
         bacnet
-        bacnetclient
+
         bacnetserver
         esp_modem
         esp_http_server
