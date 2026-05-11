@@ -12,22 +12,22 @@
 #include <stdbool.h>
 #include <stdint.h>
 /* BACnet Stack defines - first */
-#include "bacnet/bacdef.h"
+#include "bacdef.h"
 /* BACnet Stack API */
-#include "bacnet/bacdcode.h"
-#include "bacnet/bacapp.h"
-#include "bacnet/wp.h"
-#include "bacnet/basic/services.h"
-#include "bacnet/proplist.h"
-#include "bacnet/property.h"
-#include "bacnet/bactext.h"
-#include "bacnet/basic/sys/debug.h"
-#include "bacnet/basic/sys/keylist.h"
+#include "bacdcode.h"
+#include "bacapp.h"
+#include "wp.h"
+#include "services.h"
+#include "proplist.h"
+#include "property.h"
+#include "bactext.h"
+#include "debug.h"
+#include "keylist.h"
 #if defined(CHANNEL_LIGHTING_COMMAND) || defined(CHANNEL_COLOR_COMMAND)
-#include "bacnet/lighting.h"
+#include "lighting.h"
 #endif
 /* me! */
-#include "bacnet/basic/object/channel.h"
+#include "channel.h"
 
 #ifndef CONTROL_GROUPS_MAX
 #define CONTROL_GROUPS_MAX 8

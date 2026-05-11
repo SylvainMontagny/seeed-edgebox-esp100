@@ -11,10 +11,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 /* BACnet Stack defines - first */
-#include "bacnet/bacdef.h"
+#include "bacdef.h"
 /* BACnet Stack API */
-#include "bacnet/dailyschedule.h"
-#include "bacnet/bactimevalue.h"
+#include "dailyschedule.h"
+#include "bactimevalue.h"
 
 #ifdef __cplusplus
 extern "C" {

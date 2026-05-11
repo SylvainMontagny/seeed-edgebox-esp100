@@ -47,12 +47,20 @@
 #include "modem.h"
 #include "ntp.h"
 #include "gpiooutputs.h"
+#include "bacdef.h"
 
-
+#define OBJECT_TABLE_SIZE 500
 static const char *TAG = "server";
 
 /** Buffer used for receiving */
 static uint8_t rx_buffer[MAX_MPDU] = { 0 };
+
+  object_functions_t added_object;
+ 
+
+
+
+
 
 void server_task(void *arg)
 {
@@ -145,44 +153,31 @@ void server_task(void *arg)
 void Init_Service_Handlers(void)
 {
 
-    static object_functions_t Object_Table[] = {
-    { OBJECT_DEVICE, NULL, Device_Count, Device_Index_To_Instance,
-      Device_Valid_Object_Instance_Number, Device_Object_Name,
-      Device_Read_Property_Local, Device_Write_Property_Local,
-      Device_Property_Lists, NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_ANALOG_VALUE, Analog_Value_Init, Analog_Value_Count,
-      Analog_Value_Index_To_Instance, Analog_Value_Valid_Instance,
-      Analog_Value_Object_Name, Analog_Value_Read_Property,
-      Analog_Value_Write_Property, Analog_Value_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_BINARY_VALUE, Binary_Value_Init, Binary_Value_Count,
-      Binary_Value_Index_To_Instance, Binary_Value_Valid_Instance,
-      Binary_Value_Object_Name, Binary_Value_Read_Property,
-      Binary_Value_Write_Property, Binary_Value_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_SCHEDULE, Schedule_Init, Schedule_Count,
-      Schedule_Index_To_Instance, Schedule_Valid_Instance,
-      Schedule_Object_Name, Schedule_Read_Property, Schedule_Write_Property,
-      (rpm_property_lists_function)Schedule_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_MULTI_STATE_VALUE, Multistate_Value_Init, Multistate_Value_Count,
-      Multistate_Value_Index_To_Instance, Multistate_Value_Valid_Instance,
-      Multistate_Value_Object_Name, Multistate_Value_Read_Property,
-      Multistate_Value_Write_Property, Multistate_Value_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_CALENDAR, Calendar_Init, Calendar_Count,
-      Calendar_Index_To_Instance, Calendar_Valid_Instance,
-      Calendar_Object_Name, Calendar_Read_Property, Calendar_Write_Property,
-      (rpm_property_lists_function)Calendar_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL },
-    { OBJECT_TRENDLOG, Trend_Log_Init, Trend_Log_Count,
-      Trend_Log_Index_To_Instance, Trend_Log_Valid_Instance,
-      Trend_Log_Object_Name, Trend_Log_Read_Property, Trend_Log_Write_Property,
-      (rpm_property_lists_function)Trend_Log_Property_Lists,
-      TrendLogGetRRInfo, NULL, NULL, NULL, NULL, NULL },
-    { MAX_BACNET_OBJECT_TYPE, NULL, NULL, NULL, NULL, NULL,
-      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
-};
+
+    heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    ESP_LOGI(TAG, "Free heap before creating object table: %d bytes", heap_caps_get_free_size(MALLOC_CAP_8BIT));
+    object_functions_t *Object_Table = (object_functions_t *)heap_caps_malloc(
+    OBJECT_TABLE_SIZE * sizeof(object_functions_t), 
+    MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM
+);
+
+
+    create_bacnet_object(OBJECT_DEVICE,&Object_Table[0], 0);
+    create_bacnet_object(OBJECT_BINARY_VALUE,&Object_Table[0], 1);
+    create_bacnet_object(OBJECT_SCHEDULE,&Object_Table[0], 2);
+    create_bacnet_object(OBJECT_SCHEDULE,&Object_Table[0], 3);
+    create_bacnet_object(OBJECT_CALENDAR,&Object_Table[0], 4);
+    create_bacnet_object(OBJECT_CALENDAR,&Object_Table[0], 5);
+    create_bacnet_object(OBJECT_TRENDLOG,&Object_Table[0], 6);
+    create_bacnet_object(OBJECT_TRENDLOG,&Object_Table[0], 7);
+    create_bacnet_object(OBJECT_MULTI_STATE_VALUE,&Object_Table[0], 8);
+    create_bacnet_object(OBJECT_MULTI_STATE_VALUE,&Object_Table[0], 9);
+    create_bacnet_object(OBJECT_MULTI_STATE_VALUE,&Object_Table[0], 10);
+    create_bacnet_object(OBJECT_ANALOG_VALUE,&Object_Table[0], 11 );
+    heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    ESP_LOGI(TAG, "Free heap after creating object table: %d bytes", heap_caps_get_free_size(MALLOC_CAP_8BIT));
+
+
     Device_Init(&Object_Table[0]);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_WHO_IS, handler_who_is);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_WHO_HAS, handler_who_has);
@@ -200,4 +195,81 @@ void Init_Service_Handlers(void)
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_TIME_SYNCHRONIZATION,     handler_timesync);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_COV_NOTIFICATION,         handler_ucov_notification);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_PRIVATE_TRANSFER,         handler_unconfirmed_private_transfer);
+}
+
+/**
+ * @brief Creates and initializes a BACnet object based on the specified object type.
+ *
+ * This function initializes the appropriate BACnet object by calling its corresponding
+ * initialization function. It supports various BACnet object types such as Device,
+ * Analog Value, Binary Value, Schedule, Calendar, Trend Log, and Multi-State Value.
+ *
+ * @param object_type The BACnet object type to create and initialize.
+ * @param object_functions Pointer to the object functions structure.
+ * @param IndexNum The index number where the object should be added in the table.
+ */
+void create_bacnet_object(BACNET_OBJECT_TYPE object_type, object_functions_t *object_table, uint16_t IndexNum)
+{
+    /* Variable pour stocker les fonctions de l'objet à ajouter */
+    switch (object_type)
+    {      
+        case OBJECT_DEVICE:
+          added_object = (object_functions_t){OBJECT_DEVICE, NULL, Device_Count, Device_Index_To_Instance,
+          Device_Valid_Object_Instance_Number, Device_Object_Name,
+          Device_Read_Property_Local, Device_Write_Property_Local,
+          Device_Property_Lists, NULL, NULL, NULL, NULL, NULL, NULL };
+            break;
+        case OBJECT_ANALOG_VALUE:
+             added_object  =  (object_functions_t){OBJECT_ANALOG_VALUE, Analog_Value_Init, Analog_Value_Count,
+            Analog_Value_Index_To_Instance, Analog_Value_Valid_Instance,
+            Analog_Value_Object_Name, Analog_Value_Read_Property,
+            Analog_Value_Write_Property, Analog_Value_Property_Lists,
+            NULL, NULL, NULL, NULL, NULL, NULL };
+            break;
+        case OBJECT_BINARY_VALUE:
+           added_object  =  (object_functions_t){OBJECT_BINARY_VALUE, Binary_Value_Init, Binary_Value_Count,
+            Binary_Value_Index_To_Instance, Binary_Value_Valid_Instance,
+            Binary_Value_Object_Name, Binary_Value_Read_Property,
+            Binary_Value_Write_Property, Binary_Value_Property_Lists,
+            NULL, NULL, NULL, NULL, NULL, NULL };
+         
+            break;
+        case OBJECT_SCHEDULE:
+             added_object  = (object_functions_t){OBJECT_SCHEDULE, Schedule_Init, Schedule_Count,
+      Schedule_Index_To_Instance, Schedule_Valid_Instance,
+      Schedule_Object_Name, Schedule_Read_Property, Schedule_Write_Property,
+      (rpm_property_lists_function)Schedule_Property_Lists,
+      NULL, NULL, NULL, NULL, NULL, NULL };
+            break;
+        case OBJECT_CALENDAR:
+             added_object  =  (object_functions_t){OBJECT_CALENDAR, Calendar_Init, Calendar_Count,
+            Calendar_Index_To_Instance, Calendar_Valid_Instance,
+            Calendar_Object_Name, Calendar_Read_Property, Calendar_Write_Property,
+            (rpm_property_lists_function)Calendar_Property_Lists,
+            NULL, NULL, NULL, NULL, NULL, NULL };
+            break;
+        case OBJECT_TRENDLOG:
+             added_object  =  (object_functions_t){OBJECT_TRENDLOG, Trend_Log_Init, Trend_Log_Count,
+      Trend_Log_Index_To_Instance, Trend_Log_Valid_Instance,
+      Trend_Log_Object_Name, Trend_Log_Read_Property, Trend_Log_Write_Property,
+      (rpm_property_lists_function)Trend_Log_Property_Lists,
+      TrendLogGetRRInfo, NULL, NULL, NULL, NULL, NULL };
+            break;
+        case OBJECT_MULTI_STATE_VALUE:
+            added_object  =  (object_functions_t){OBJECT_MULTI_STATE_VALUE, Multistate_Value_Init, Multistate_Value_Count,
+      Multistate_Value_Index_To_Instance, Multistate_Value_Valid_Instance,
+      Multistate_Value_Object_Name, Multistate_Value_Read_Property,
+      Multistate_Value_Write_Property, Multistate_Value_Property_Lists,
+      NULL, NULL, NULL, NULL, NULL, NULL };
+            break;
+        default:
+            ESP_LOGW(TAG, "Unknown BACnet object type: %d", object_type);
+            break;
+    }
+
+    
+    
+        object_table[IndexNum] = added_object; /*ajoute l'objet à la table*/
+      
+   
 }
