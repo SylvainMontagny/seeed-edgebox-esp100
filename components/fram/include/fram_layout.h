@@ -8,9 +8,6 @@
 #define FRAM_AV_STATE_ADDR     0x0010
 typedef struct { float av0; float av1; uint8_t valid; uint8_t _pad[3]; } fram_av_state_t;
 
-#define FRAM_BV_STATE_ADDR     0x0020
-typedef struct { uint8_t manual_mode; uint8_t valid; uint8_t _pad[2]; } fram_bv_state_t;
-
 #define FRAM_RTC_BACKUP_ADDR   0x0030
 typedef struct { uint8_t year,month,day,hour,min,sec,valid,_pad; } fram_rtc_backup_t;
 

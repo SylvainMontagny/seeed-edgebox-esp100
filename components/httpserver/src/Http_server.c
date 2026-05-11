@@ -71,8 +71,6 @@ static const char *TAG = "http_srv";
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
 
-/* Déclaré dans main.c */
-extern void sched_force_av(int inst, float val);
 static httpd_handle_t s_server = NULL;
 
 /* ================================================================
@@ -131,20 +129,6 @@ static const char HTML_PAGE[] =
 "<div class='stat'><span class='stat-label'>Lever / Coucher</span><sol><span class='stat-value' id='sun-times'>--</span></sol></div>"
 "<div class='stat'><span class='stat-label'>Solaire</span><span class='stat-value' id='solar-status'>--</span></div>"
 "</div>"
-"<div class='card'><h2>Forcage manuel</h2>"
-"<div class='info-box' id='force-info'>Forcer une valeur -- sera ecrase au lever/coucher</div>"
-"<div class='slider-row'>"
-"<div class='slider-label'><span>Zone A (AV0)</span><span id='lbl0'>50%</span></div>"
-"<input type='range' id='sl0' min='0' max='100' value='50' oninput=\"document.getElementById('lbl0').textContent=this.value+'%'\">"
-"</div>"
-"<div class='slider-row'>"
-"<div class='slider-label'><span>Zone B (AV1)</span><span id='lbl1'>50%</span></div>"
-"<input type='range' id='sl1' min='0' max='100' value='50' oninput=\"document.getElementById('lbl1').textContent=this.value+'%'\">"
-"</div>"
-"<div class='btn-row'>"
-"<button class='btn btn-primary' onclick='setAV(0)'>Forcer Zone A</button>"
-"<button class='btn btn-primary' onclick='setAV(1)'>Forcer Zone B</button>"
-"</div></div>"
 "<div class='card'><h2>Config solaire</h2>"
 "<div class='stat'><span class='stat-label'>Latitude</span><input id='lat' style='background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;padding:4px 6px;width:100px;font-size:12px' value='45.78'></div>"
 "<div class='stat'><span class='stat-label'>Longitude</span><input id='lon' style='background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;padding:4px 6px;width:100px;font-size:12px' value='5.93'></div>"
@@ -438,58 +422,6 @@ static esp_err_t handler_solar_post(httpd_req_t *req)
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Connection", "close");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_sendstr(req, "{\"ok\":true}");
-    return ESP_OK;
-}
-
-/* POST /api/mode */
-static esp_err_t handler_mode(httpd_req_t *req)
-{
-    char buf[64];
-    if (read_body(req, buf, sizeof(buf)) < 0) return ESP_FAIL;
-    cJSON *root = cJSON_Parse(buf);
-    if (!root) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "JSON invalide"); return ESP_OK; }
-
-    cJSON *v = cJSON_GetObjectItem(root, "manual");
-    bool manual = cJSON_IsTrue(v);
-    cJSON_Delete(root);
-
-    Binary_Value_Present_Value_Set(0, manual ? BINARY_ACTIVE : BINARY_INACTIVE);
-    rfm_save_bv_state(manual);
-    ESP_LOGI(TAG, "Mode → %s (depuis page web)", manual ? "MANUEL" : "AUTO");
-
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Connection", "close");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_sendstr(req, "{\"ok\":true}");
-    return ESP_OK;
-}
-
-/* POST /api/av */
-static esp_err_t handler_av(httpd_req_t *req)
-{
-    char buf[128];
-    if (read_body(req, buf, sizeof(buf)) < 0) return ESP_FAIL;
-    cJSON *root = cJSON_Parse(buf);
-    if (!root) return ESP_FAIL;
-
-    uint32_t inst = cJSON_GetObjectItem(root, "instance")->valueint;
-    float val = (float)cJSON_GetObjectItem(root, "value")->valuedouble;
-    cJSON_Delete(root);
-
-    // --- LES 3 LIGNES CRITIQUES ICI ---
-    // 1. On écrit en priorité 8 (Manual Operator) pour être plus fort que le Schedule
-    Analog_Value_Present_Value_Set(inst, val, 8);
-    
-    // 2. On bloque la logique auto interne pour cet index
-    sched_force_av(inst, val); 
-
-    // 3. On envoie l'ordre direct au PWM (les lampes s'allument direct)
-    av_pwm_apply(inst, val);
-    // ----------------------------------
-
-    ESP_LOGI(TAG, "Forcage Manuel Web: AV%ld = %.1f%%", inst, val);
-
     httpd_resp_sendstr(req, "{\"ok\":true}");
     return ESP_OK;
 }
@@ -855,8 +787,6 @@ esp_err_t http_server_start(void)
         { .uri="/api/status", .method=HTTP_GET,  .handler=handler_status  },
         { .uri="/api/solar",  .method=HTTP_GET,  .handler=handler_solar_get},
         { .uri="/api/solar",  .method=HTTP_POST, .handler=handler_solar_post},
-        { .uri="/api/mode",   .method=HTTP_POST, .handler=handler_mode    },
-        { .uri="/api/av",     .method=HTTP_POST, .handler=handler_av      },
         { .uri="/api/events",         .method=HTTP_GET,  .handler=handler_events    },
         { .uri="/api/special_events", .method=HTTP_GET,  .handler=handler_se_get    },
         { .uri="/api/special_events", .method=HTTP_POST, .handler=handler_se_post   },

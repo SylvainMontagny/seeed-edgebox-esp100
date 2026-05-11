@@ -95,7 +95,6 @@ esp_err_t rfm_init(void)
         /* Remise à zéro des zones d'état */
         uint8_t zeros[16] = {0};
         fram_write(FRAM_AV_STATE_ADDR, zeros, sizeof(fram_av_state_t));
-        fram_write(FRAM_BV_STATE_ADDR, zeros, sizeof(fram_bv_state_t));
         fram_write(FRAM_RTC_BACKUP_ADDR, zeros, sizeof(fram_rtc_backup_t));
 
         /* Head du ring buffer à 0 */
@@ -147,39 +146,6 @@ esp_err_t rfm_load_av_state(float *av0, float *av1)
     return ESP_OK;
 }
 
-/* ══════════════════════════════════════════════════════════════
- * Persistance BV
- * ══════════════════════════════════════════════════════════════*/
-esp_err_t rfm_save_bv_state(bool manual)
-{
-    fram_bv_state_t s = {
-        .manual_mode = manual ? 1 : 0,
-        .valid       = 0xAA,
-        ._pad        = {0}
-    };
-    esp_err_t ret = fram_write(FRAM_BV_STATE_ADDR, (uint8_t *)&s, sizeof(s));
-    if (ret == ESP_OK) {
-        ESP_LOGD(TAG, "[BV SAVE] mode=%s", manual ? "MANUEL" : "AUTO");
-    }
-    return ret;
-}
-
-esp_err_t rfm_load_bv_state(bool *manual)
-{
-    fram_bv_state_t s;
-    esp_err_t ret = fram_read(FRAM_BV_STATE_ADDR, (uint8_t *)&s, sizeof(s));
-    if (ret != ESP_OK) return ret;
-
-    if (s.valid != 0xAA) {
-        ESP_LOGW(TAG, "[BV LOAD] Données invalides — mode AUTO par défaut");
-        *manual = false;
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    *manual = (s.manual_mode == 1);
-    ESP_LOGI(TAG, "[BV LOAD] mode=%s", *manual ? "MANUEL" : "AUTO");
-    return ESP_OK;
-}
 
 /* ══════════════════════════════════════════════════════════════
  * Gestion du temps
@@ -344,18 +310,6 @@ void rfm_dump(void)
         }
     } else {
         ESP_LOGE(TAG, "[AV]     Erreur lecture");
-    }
-
-    /* ── 3. BV state ── */
-    fram_bv_state_t bv;
-    if (fram_read(FRAM_BV_STATE_ADDR, (uint8_t *)&bv, sizeof(bv)) == ESP_OK) {
-        if (bv.valid == 0xAA) {
-            ESP_LOGI(TAG, "[BV]     Mode = %s", bv.manual_mode ? "MANUEL" : "AUTO");
-        } else {
-            ESP_LOGW(TAG, "[BV]     Zone vide (valid=0x%02X)", bv.valid);
-        }
-    } else {
-        ESP_LOGE(TAG, "[BV]     Erreur lecture");
     }
 
     /* ── 4. RTC backup ── */

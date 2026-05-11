@@ -1,4 +1,7 @@
 idf_component_register(
+
+    LDFRAGMENTS 
+        "linker.lf" 
     SRCS
         "main.c"
     INCLUDE_DIRS
@@ -30,3 +33,4 @@ idf_component_register(
 
         
 )
+

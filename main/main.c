@@ -122,30 +122,6 @@ static volatile bool  g_force_pv1   = false;
 static volatile float g_forced_val0 = 0.0f;
 static volatile float g_forced_val1 = 0.0f;
 
-void sched_force_av(int inst, float val)
-{
-    if (inst == 0) {
-        Analog_Value_Present_Value_Set(0, val, 16);
-        av_pwm_apply(0, val);
-        Multistate_Value_Update_From_AV(0, val);
-        rfm_save_av_state(val, Analog_Value_Present_Value(1));
-        rfm_log_event(EVENT_AV0_CHANGE, val, 0);
-        g_force_pv0   = true;
-        g_forced_val0 = val;
-        g_prev_pv0    = -1.0f;
-        ESP_LOGI("main", "[FORCE] AV0 → %.1f%% (page web)", val);
-    } else {
-        Analog_Value_Present_Value_Set(1, val, 16);
-        av_pwm_apply(1, val);
-        Multistate_Value_Update_From_AV(1, val);
-        rfm_save_av_state(Analog_Value_Present_Value(0), val);
-        rfm_log_event(EVENT_AV1_CHANGE, val, 0);
-        g_force_pv1   = true;
-        g_forced_val1 = val;
-        g_prev_pv1    = -1.0f;
-        ESP_LOGI("main", "[FORCE] AV1 → %.1f%% (page web)", val);
-    }
-}
 
 static void schedule_task(void *pvParameters)
 {
@@ -346,6 +322,9 @@ static bool network_initialize(void)
 
 void app_main(void)
 {
+
+  
+    
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES) 
     {
@@ -365,15 +344,11 @@ void app_main(void)
 
     if (rfm_init() == ESP_OK) {
         float saved_av0 = 0.0f, saved_av1 = 0.0f;
-        bool  saved_manual = false;
         if (rfm_load_av_state(&saved_av0, &saved_av1) == ESP_OK) {
             Analog_Value_Present_Value_Set(0, saved_av0, 16);
             Analog_Value_Present_Value_Set(1, saved_av1, 16);
             av_pwm_apply(0, saved_av0);
             av_pwm_apply(1, saved_av1);
-        }
-        if (rfm_load_bv_state(&saved_manual) == ESP_OK) {
-            Binary_Value_Present_Value_Set(0, saved_manual ? BINARY_ACTIVE : BINARY_INACTIVE);
         }
         ESP_LOGI(TAG, "[BOOT] AV0=%.1f AV1=%.1f", saved_av0, saved_av1);
         sched_persist_restore_all();

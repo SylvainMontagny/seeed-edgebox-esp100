@@ -1,0 +1,5 @@
+[mapping:server_task]
+archive: libserver_task.a
+entries:
+    * (extram_bss)
+   
