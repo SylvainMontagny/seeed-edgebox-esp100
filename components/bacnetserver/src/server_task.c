@@ -165,14 +165,9 @@ void Init_Service_Handlers(void)
     create_bacnet_object(OBJECT_DEVICE,&Object_Table[0], 0);
     create_bacnet_object(OBJECT_BINARY_VALUE,&Object_Table[0], 1);
     create_bacnet_object(OBJECT_SCHEDULE,&Object_Table[0], 2);
-    create_bacnet_object(OBJECT_SCHEDULE,&Object_Table[0], 3);
     create_bacnet_object(OBJECT_CALENDAR,&Object_Table[0], 4);
-    create_bacnet_object(OBJECT_CALENDAR,&Object_Table[0], 5);
     create_bacnet_object(OBJECT_TRENDLOG,&Object_Table[0], 6);
-    create_bacnet_object(OBJECT_TRENDLOG,&Object_Table[0], 7);
     create_bacnet_object(OBJECT_MULTI_STATE_VALUE,&Object_Table[0], 8);
-    create_bacnet_object(OBJECT_MULTI_STATE_VALUE,&Object_Table[0], 9);
-    create_bacnet_object(OBJECT_MULTI_STATE_VALUE,&Object_Table[0], 10);
     create_bacnet_object(OBJECT_ANALOG_VALUE,&Object_Table[0], 11 );
     heap_caps_get_free_size(MALLOC_CAP_8BIT);
     ESP_LOGI(TAG, "Free heap after creating object table: %d bytes", heap_caps_get_free_size(MALLOC_CAP_8BIT));
