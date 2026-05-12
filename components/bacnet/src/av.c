@@ -57,7 +57,7 @@ static const char *TAG = "AV";
 extern void av_pwm_apply(uint32_t instance, float percent);
 
 #ifndef MAX_ANALOG_VALUES
-#define MAX_ANALOG_VALUES 250
+#define MAX_ANALOG_VALUES 100
 #endif
 
 ANALOG_VALUE_DESCR AV_Descr[MAX_ANALOG_VALUES];

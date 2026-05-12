@@ -49,7 +49,9 @@
 #include "gpiooutputs.h"
 #include "bacdef.h"
 
-#define OBJECT_TABLE_SIZE 500
+#define OBJECT_TABLE_BYTE_SIZE 4194304
+
+
 static const char *TAG = "server";
 
 /** Buffer used for receiving */
@@ -153,38 +155,39 @@ void server_task(void *arg)
 void Init_Service_Handlers(void)
 {
 
-
-    heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     ESP_LOGI(TAG, "Free heap before creating object table: %d bytes", heap_caps_get_free_size(MALLOC_CAP_8BIT));
+
+  
     object_functions_t *Object_Table = (object_functions_t *)heap_caps_malloc(
-    OBJECT_TABLE_SIZE * sizeof(object_functions_t), 
+    OBJECT_TABLE_BYTE_SIZE, 
     MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM
 );
 
-
-    create_bacnet_object(OBJECT_DEVICE,&Object_Table[0], 0);
+    create_bacnet_object(OBJECT_DEVICE, &Object_Table[0], 0);
+    /*create_bacnet_object(OBJECT_DEVICE,&Object_Table[0], 0);
     create_bacnet_object(OBJECT_BINARY_VALUE,&Object_Table[0], 1);
     create_bacnet_object(OBJECT_SCHEDULE,&Object_Table[0], 2);
-    create_bacnet_object(OBJECT_CALENDAR,&Object_Table[0], 4);
-    create_bacnet_object(OBJECT_TRENDLOG,&Object_Table[0], 6);
-    create_bacnet_object(OBJECT_MULTI_STATE_VALUE,&Object_Table[0], 8);
-    create_bacnet_object(OBJECT_ANALOG_VALUE,&Object_Table[0], 11 );
-    heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    create_bacnet_object(OBJECT_CALENDAR,&Object_Table[0], 3);
+    create_bacnet_object(OBJECT_TRENDLOG,&Object_Table[0], 4);
+    create_bacnet_object(OBJECT_MULTI_STATE_VALUE,&Object_Table[0], 5);*/
+    create_bacnet_object(OBJECT_ANALOG_VALUE,&Object_Table[0], 1 );
+    Device_Init(&Object_Table[0]);  
+
+    heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     ESP_LOGI(TAG, "Free heap after creating object table: %d bytes", heap_caps_get_free_size(MALLOC_CAP_8BIT));
 
-
-    Device_Init(&Object_Table[0]);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_WHO_IS, handler_who_is);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_WHO_HAS, handler_who_has);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_I_AM, handler_i_am_bind);
     apdu_set_unrecognized_service_handler_handler(handler_unrecognized_service);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_READ_PROPERTY,      handler_read_property);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_READ_PROP_MULTIPLE,  handler_read_property_multiple);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_WRITE_PROPERTY,     handler_write_property);
+    apdu_set_confirmed_handler(SERVICE_CONFIRMED_READ_PROPERTY, handler_read_property);
+    apdu_set_confirmed_handler(SERVICE_CONFIRMED_READ_PROP_MULTIPLE, handler_read_property_multiple);
+    apdu_set_confirmed_handler(SERVICE_CONFIRMED_WRITE_PROPERTY, handler_write_property);
     apdu_set_confirmed_handler(SERVICE_CONFIRMED_WRITE_PROP_MULTIPLE, handler_write_property_multiple);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_READ_RANGE,         handler_read_range);
+    apdu_set_confirmed_handler(SERVICE_CONFIRMED_READ_RANGE, handler_read_range);
     apdu_set_confirmed_handler(SERVICE_CONFIRMED_REINITIALIZE_DEVICE, handler_reinitialize_device);
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_SUBSCRIBE_COV,      handler_cov_subscribe);
+    apdu_set_confirmed_handler(SERVICE_CONFIRMED_SUBSCRIBE_COV, handler_cov_subscribe);
     apdu_set_confirmed_handler(SERVICE_CONFIRMED_DEVICE_COMMUNICATION_CONTROL, handler_device_communication_control);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_UTC_TIME_SYNCHRONIZATION, handler_timesync_utc);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_TIME_SYNCHRONIZATION,     handler_timesync);
@@ -212,14 +215,14 @@ void create_bacnet_object(BACNET_OBJECT_TYPE object_type, object_functions_t *ob
           added_object = (object_functions_t){OBJECT_DEVICE, NULL, Device_Count, Device_Index_To_Instance,
           Device_Valid_Object_Instance_Number, Device_Object_Name,
           Device_Read_Property_Local, Device_Write_Property_Local,
-          Device_Property_Lists, NULL, NULL, NULL, NULL, NULL, NULL };
+          Device_Property_Lists, NULL,NULL, NULL, NULL, NULL, NULL };
             break;
         case OBJECT_ANALOG_VALUE:
              added_object  =  (object_functions_t){OBJECT_ANALOG_VALUE, Analog_Value_Init, Analog_Value_Count,
             Analog_Value_Index_To_Instance, Analog_Value_Valid_Instance,
             Analog_Value_Object_Name, Analog_Value_Read_Property,
             Analog_Value_Write_Property, Analog_Value_Property_Lists,
-            NULL, NULL, NULL, NULL, NULL, NULL };
+            NULL,NULL, NULL, NULL, NULL, NULL };
             break;
         case OBJECT_BINARY_VALUE:
            added_object  =  (object_functions_t){OBJECT_BINARY_VALUE, Binary_Value_Init, Binary_Value_Count,
@@ -234,7 +237,7 @@ void create_bacnet_object(BACNET_OBJECT_TYPE object_type, object_functions_t *ob
       Schedule_Index_To_Instance, Schedule_Valid_Instance,
       Schedule_Object_Name, Schedule_Read_Property, Schedule_Write_Property,
       (rpm_property_lists_function)Schedule_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL };
+      NULL,NULL, NULL, NULL, NULL, NULL };
             break;
         case OBJECT_CALENDAR:
              added_object  =  (object_functions_t){OBJECT_CALENDAR, Calendar_Init, Calendar_Count,
@@ -248,7 +251,7 @@ void create_bacnet_object(BACNET_OBJECT_TYPE object_type, object_functions_t *ob
       Trend_Log_Index_To_Instance, Trend_Log_Valid_Instance,
       Trend_Log_Object_Name, Trend_Log_Read_Property, Trend_Log_Write_Property,
       (rpm_property_lists_function)Trend_Log_Property_Lists,
-      TrendLogGetRRInfo, NULL, NULL, NULL, NULL, NULL };
+      TrendLogGetRRInfo,NULL, NULL, NULL, NULL, NULL };
             break;
         case OBJECT_MULTI_STATE_VALUE:
             added_object  =  (object_functions_t){OBJECT_MULTI_STATE_VALUE, Multistate_Value_Init, Multistate_Value_Count,
