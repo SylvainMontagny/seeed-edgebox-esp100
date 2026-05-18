@@ -38,7 +38,6 @@
 #include "bv.h"
 #include "handlers.h"
 #include "esp_log.h"
-#include "msv.h"
 
 static const char *TAG = "BV";
 
@@ -421,8 +420,6 @@ bool Binary_Value_Write_Property(
                         ESP_LOGI(TAG, "AV Control DISABLED - AV objects are now locked");
                     }
                     
-                    /* Mise à jour MSV2 */
-					Multistate_Value_Update_From_BV(level == BINARY_ACTIVE);
                     
                     status = true;
                 } else if (priority == 6) {

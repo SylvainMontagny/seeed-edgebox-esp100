@@ -44,7 +44,6 @@
 #include "handlers.h"
 #include "av.h"
 #include "bv.h"
-#include "msv.h"
 /* SUPPRIMÉ: driver/gpio.h — plus de GPIO digital, uniquement PWM via av_pwm_apply() */
 #include "driver/ledc.h"
 #include "esp_log.h"
@@ -57,7 +56,7 @@ static const char *TAG = "AV";
 extern void av_pwm_apply(uint32_t instance, float percent);
 
 #ifndef MAX_ANALOG_VALUES
-#define MAX_ANALOG_VALUES 100
+#define MAX_ANALOG_VALUES 4
 #endif
 
 ANALOG_VALUE_DESCR AV_Descr[MAX_ANALOG_VALUES];
@@ -123,6 +122,13 @@ void Analog_Value_Init(
         memset(&AV_Descr[i], 0x00, sizeof(ANALOG_VALUE_DESCR));
         AV_Descr[i].Present_Value = 0.0;
         AV_Descr[i].Units = UNITS_NO_UNITS;
+
+        /* AV:2 et AV:3 (offsets solaires) */
+        if (i == 2 || i == 3) {
+            AV_Descr[i].Units = UNITS_MINUTES;
+            AV_Descr[i].Present_Value = 0.0; 
+        }
+
 #if defined(INTRINSIC_REPORTING)
         AV_Descr[i].Event_State = EVENT_STATE_NORMAL;
         /* notification class not connected */
@@ -547,8 +553,7 @@ bool Analog_Value_Write_Property(
                        AV2 → virtuel (pas de sortie physique)
                     ─────────────────────────────────────────────────────── */
                     av_pwm_apply(wp_data->object_instance, value.type.Real);
-                    /* Mise à jour du MSV correspondant */
-					Multistate_Value_Update_From_AV(wp_data->object_instance, value.type.Real);
+              
                     /* Sauvegarde en FRAM pour persistance après coupure */
                     rfm_save_av_state(
                         Analog_Value_Present_Value(0),

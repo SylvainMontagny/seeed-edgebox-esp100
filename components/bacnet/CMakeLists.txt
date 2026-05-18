@@ -118,7 +118,6 @@ idf_component_register(
         "src/special_event.c"
         "src/weeklyschedule.c"
         "src/trendlog.c"
-        "src/msv.c"
         "src/calendar.c"
         "src/schedule_persist.c"
     INCLUDE_DIRS 

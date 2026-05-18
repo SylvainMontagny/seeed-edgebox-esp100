@@ -3,7 +3,7 @@
 #include "esp_log.h"
 #include <stdlib.h>
 
-// On utilise le même numéro de bus I2C que le RTC
+// même numéro de bus I2C que RTC
 #define I2C_MASTER_NUM I2C_NUM_0 
 
 esp_err_t fram_write(uint16_t mem_addr, const uint8_t *data, size_t len) {

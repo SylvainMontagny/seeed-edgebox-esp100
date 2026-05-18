@@ -22,15 +22,9 @@
 extern void ntp_initialize(void);
 extern void rfm_time_init(bool);
 extern void solar_invalidate_cache(void);
-extern void schedule_update_solar_times(void);
 
 // Fallback stub when the solar scheduling implementation is missing.
 static const char *TAG = "modem";
-void schedule_update_solar_times(void) __attribute__((weak));
-void schedule_update_solar_times(void)
-{
-    ESP_LOGW(TAG, "[SOLAR] schedule_update_solar_times() unavailable - fallback no-op");
-}
 
 // Local TAG for logging
 
@@ -244,7 +238,6 @@ void modem_reconnect_task(void *pvParameters)
                 }
 
                 solar_invalidate_cache();
-                schedule_update_solar_times();
                 rfm_log_event(EVENT_NTP_SYNC, 0.0f, 0);
                 ESP_LOGI(TAG, "[RECONNECT] ✅ Connexion etablie depuis hors-ligne !");
                 break;  /* sortir de la boucle hors-ligne → tomber dans la boucle surveillance */
@@ -319,8 +312,6 @@ void modem_reconnect_task(void *pvParameters)
 
             /* Recalculer les heures solaires avec la nouvelle heure NTP */
             solar_invalidate_cache();
-            schedule_update_solar_times();
-
             rfm_log_event(EVENT_NTP_SYNC, 0.0f, 0);
 
         } else {

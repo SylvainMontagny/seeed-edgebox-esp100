@@ -35,6 +35,7 @@ typedef struct Schedule_Descr {
     BACNET_APPLICATION_DATA_VALUE Schedule_Default;
     BACNET_APPLICATION_DATA_VALUE Present_Value;
     bool Out_Of_Service;
+
     uint8_t Priority_For_Writing;
 
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE Object_Property_References[2];

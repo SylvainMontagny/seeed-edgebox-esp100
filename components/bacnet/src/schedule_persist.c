@@ -8,54 +8,6 @@
 static const char *TAG = "sched_persist";
 
 /* ================================================================
- * sched_persist_save_weekly
- * Sauvegarde le Weekly Schedule d'un schedule en FRAM.
- * Format compact : pour chaque jour → TV_Count + entrées time/val.
- * ================================================================ */
-esp_err_t sched_persist_save_weekly(uint32_t instance, SCHEDULE_DESCR *desc)
-{
-    if (!desc || instance >= 2) return ESP_ERR_INVALID_ARG;
-
-    uint8_t  buf[FRAM_SCH_DAY_SIZE];
-    uint16_t base_addr = FRAM_SCH_ADDR(instance);
-    int day, tv;
-    esp_err_t ret;
-
-    for (day = 0; day < FRAM_SCH_DAYS; day++) {
-        BACNET_DAILY_SCHEDULE *ds = &desc->Weekly_Schedule[day];
-        uint8_t count = (ds->TV_Count < FRAM_SCH_MAX_TV)
-                        ? (uint8_t)ds->TV_Count
-                        : FRAM_SCH_MAX_TV;
-
-        memset(buf, 0, sizeof(buf));
-        buf[0] = count;
-
-        for (tv = 0; tv < count; tv++) {
-            fram_tv_entry_t entry;
-            entry.hour       = ds->Time_Values[tv].Time.hour;
-            entry.min        = ds->Time_Values[tv].Time.min;
-            entry.sec        = ds->Time_Values[tv].Time.sec;
-            entry.hundredths = ds->Time_Values[tv].Time.hundredths;
-            entry.value      = ds->Time_Values[tv].Value.type.Real;
-            memcpy(&buf[1 + tv * FRAM_SCH_TV_SIZE], &entry,
-                   sizeof(fram_tv_entry_t));
-        }
-
-        uint16_t addr = base_addr + (uint16_t)(day * FRAM_SCH_DAY_SIZE);
-        ret = fram_write(addr, buf, FRAM_SCH_DAY_SIZE);
-        if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "Erreur écriture Weekly SCH%lu jour%d : %s",
-                     (unsigned long)instance, day, esp_err_to_name(ret));
-            return ret;
-        }
-    }
-
-    ESP_LOGI(TAG, "Weekly Schedule SCH%lu sauvegardé",
-             (unsigned long)instance);
-    return ESP_OK;
-}
-
-/* ================================================================
  * sched_persist_save_special_events
  * Sauvegarde les Special Events d'un schedule en FRAM.
  * Seuls les CalendarEntry de type DATE sont supportés.
@@ -132,50 +84,6 @@ esp_err_t sched_persist_save_special_events(uint32_t instance,
 }
 
 /* ================================================================
- * sched_persist_restore_weekly
- * Restaure le Weekly Schedule d'un schedule depuis la FRAM.
- * ================================================================ */
-static esp_err_t restore_weekly(uint32_t instance)
-{
-    SCHEDULE_DESCR *desc = Schedule_Object(instance);
-    if (!desc) return ESP_ERR_INVALID_ARG;
-
-    uint8_t  buf[FRAM_SCH_DAY_SIZE];
-    uint16_t base_addr = FRAM_SCH_ADDR(instance);
-    int day, tv;
-    esp_err_t ret;
-    bool has_entries = false;
-
-    for (day = 0; day < FRAM_SCH_DAYS; day++) {
-        uint16_t addr = base_addr + (uint16_t)(day * FRAM_SCH_DAY_SIZE);
-        ret = fram_read(addr, buf, FRAM_SCH_DAY_SIZE);
-        if (ret != ESP_OK) return ret;
-
-        uint8_t count = buf[0];
-        if (count > FRAM_SCH_MAX_TV) count = 0; /* données corrompues */
-
-        desc->Weekly_Schedule[day].TV_Count = count;
-        for (tv = 0; tv < count; tv++) {
-            fram_tv_entry_t entry;
-            memcpy(&entry, &buf[1 + tv * FRAM_SCH_TV_SIZE],
-                   sizeof(fram_tv_entry_t));
-            desc->Weekly_Schedule[day].Time_Values[tv].Time.hour       = entry.hour;
-            desc->Weekly_Schedule[day].Time_Values[tv].Time.min        = entry.min;
-            desc->Weekly_Schedule[day].Time_Values[tv].Time.sec        = entry.sec;
-            desc->Weekly_Schedule[day].Time_Values[tv].Time.hundredths = entry.hundredths;
-            desc->Weekly_Schedule[day].Time_Values[tv].Value.tag       = BACNET_APPLICATION_TAG_REAL;
-            desc->Weekly_Schedule[day].Time_Values[tv].Value.type.Real = entry.value;
-            has_entries = true;
-        }
-    }
-
-    if (has_entries)
-        ESP_LOGI(TAG, "Weekly Schedule SCH%lu restauré",
-                 (unsigned long)instance);
-    return ESP_OK;
-}
-
-/* ================================================================
  * restore_special_events
  * Restaure les Special Events d'un schedule depuis la FRAM.
  * ================================================================ */
@@ -244,20 +152,12 @@ static esp_err_t restore_special_events(uint32_t instance)
 
 /* ================================================================
  * sched_persist_restore_all
- * Restaure Weekly Schedule + Special Events des 2 schedules.
+ * Restaure  special Events des 2 schedules.
  * Appelée dans app_main() après Init_Service_Handlers().
  * ================================================================ */
 esp_err_t sched_persist_restore_all(void)
 {
     esp_err_t ret;
-
-    ret = restore_weekly(0);
-    if (ret != ESP_OK)
-        ESP_LOGW(TAG, "Weekly SCH0 non restauré : %s", esp_err_to_name(ret));
-
-    ret = restore_weekly(1);
-    if (ret != ESP_OK)
-        ESP_LOGW(TAG, "Weekly SCH1 non restauré : %s", esp_err_to_name(ret));
 
     ret = restore_special_events(0);
     if (ret != ESP_OK)

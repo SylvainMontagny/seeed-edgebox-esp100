@@ -8,7 +8,6 @@
 #include <sys/time.h>
 #include <time.h>
 
-extern void schedule_update_solar_times(void);
 
 const char *TAG = "ntp";
 void ntp_sync_notification_cb(struct timeval *tv)
@@ -20,7 +19,6 @@ void ntp_sync_notification_cb(struct timeval *tv)
     rfm_sync_rtc_from_ntp();
     /* Recalculer les heures solaires après sync NTP */
     solar_invalidate_cache();
-    schedule_update_solar_times(); 
 }
 
 void ntp_initialize(void)

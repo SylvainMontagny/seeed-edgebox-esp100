@@ -99,9 +99,9 @@ void solar_invalidate_cache(void){s_cache_day=-1;}
 
 bool solar_is_night_now(void)
 {
+
+    
     if(!s_cfg.enabled)return false;
-
-
     solar_times_t st=solar_get_today();
     if(!st.valid)return false;
     time_t now=time(NULL); struct tm *t=localtime(&now);
@@ -110,7 +110,8 @@ bool solar_is_night_now(void)
     int sr =st.sunrise_h*60+st.sunrise_m;
     if(ss>sr) return(cur>=ss||cur<sr);
     else      return(cur>=ss&&cur<sr);
-
+  
+   
 }
 
 esp_err_t solar_save_config(const solar_config_t *cfg)
@@ -136,4 +137,30 @@ esp_err_t solar_init(void)
         ESP_LOGW(TAG,"Pas de config FRAM — défaut Paris (48.85, 2.35)");
     }
     return ESP_OK;
+}
+
+void solar_get_offsets(int16_t *offset_before_sunset, int16_t *offset_after_sunrise)
+{
+    if (!offset_before_sunset || !offset_after_sunrise) return;
+    
+
+    *offset_before_sunset = s_cfg.offset_before_sunset;
+    *offset_after_sunrise = s_cfg.offset_after_sunrise;
+    
+    
+}
+
+
+void solar_set_offsets(int16_t offset_before_sunset, int16_t offset_after_sunrise)
+{
+    if (s_cfg.offset_before_sunset != offset_before_sunset ||
+        s_cfg.offset_after_sunrise != offset_after_sunrise) {
+        s_cfg.offset_before_sunset = offset_before_sunset;
+        s_cfg.offset_after_sunrise = offset_after_sunrise;
+    
+        fram_write(FRAM_SOLAR_CONFIG_ADDR, (uint8_t*)&s_cfg, sizeof(s_cfg));
+        solar_invalidate_cache();
+        ESP_LOGI(TAG, "Offsets mis à jour: before_sunset=%d, after_sunrise=%d",
+                 offset_before_sunset, offset_after_sunrise);
+    }
 }

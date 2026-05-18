@@ -14,7 +14,6 @@
 #include "led.h"
 #include "device.h"
 #include "trendlog.h"
-#include "msv.h"
 #include "calendar.h"
 #include "config.h"
 #include "address.h"
@@ -102,19 +101,14 @@ static void reconnect_task(void *pvParameters)
     }
 }
 
-static bool schedule_has_active_entries(SCHEDULE_DESCR *desc, BACNET_WEEKDAY wday)
+static void update_solar_offsets_from_av(void)
 {
-    if (!desc) return false;
-#if BACNET_EXCEPTION_SCHEDULE_SIZE > 0
-    if (desc->Exception_Count > 0) return true;
-#endif
-    if (wday >= 1 && wday <= 7) {
-        if (desc->Weekly_Schedule[wday - 1].TV_Count > 0) return true;
-    }
-    return false;
+    int16_t offset_before = (int16_t)Analog_Value_Present_Value(2);
+    int16_t offset_after  = (int16_t)Analog_Value_Present_Value(3);
+    
+    solar_set_offsets(offset_before, offset_after);
 }
 
-/* Valeurs précédentes — accessibles pour forçage depuis Http_server */
 static volatile float g_prev_pv0    = -1.0f;
 static volatile float g_prev_pv1    = -1.0f;
 static volatile bool  g_force_pv0   = false;
@@ -122,11 +116,9 @@ static volatile bool  g_force_pv1   = false;
 static volatile float g_forced_val0 = 0.0f;
 static volatile float g_forced_val1 = 0.0f;
 
-
 static void schedule_task(void *pvParameters)
 {
     BACNET_TIME btime;
-    BACNET_WEEKDAY wday;
     SCHEDULE_DESCR *desc0 = NULL;
     SCHEDULE_DESCR *desc1 = NULL;
     struct tm *t;
@@ -155,8 +147,6 @@ static void schedule_task(void *pvParameters)
                  st_init.sunrise_h, st_init.sunrise_m,
                  st_init.sunset_h,  st_init.sunset_m,
                  (int)solar_is_night_now());
-        /* ---- MOD 1 : Remplir le Weekly Schedule avec les heures solaires ---- */
-        schedule_update_solar_times();
     } else {
         ESP_LOGW(TAG, "[SOLAR] Calcul invalide — configurer lat/lon sur la page web");
     }
@@ -172,28 +162,23 @@ static void schedule_task(void *pvParameters)
         btime.min        = (uint8_t)t->tm_min;
         btime.sec        = (uint8_t)t->tm_sec;
         btime.hundredths = 0;
-
-        wday = (BACNET_WEEKDAY)((t->tm_wday == 0) ? 7 : t->tm_wday);
-
-        /* ---- MOD 1 : Recalcul solaire à minuit → mise à jour Weekly ---- */
-        if (t->tm_mday != s_prev_mday) {
-            s_prev_mday = t->tm_mday;
-            solar_invalidate_cache();
-            schedule_update_solar_times();
-            ESP_LOGI(TAG, "[SOLAR-SCH] Nouveau jour — Weekly Schedule mis à jour");
-        }
+        uint8_t bacnet_wday = (t->tm_wday == 0) ? 7 : (uint8_t)t->tm_wday;
 
         desc0 = Schedule_Object(0);
-        if (desc0) { Schedule_Recalculate_PV(desc0, wday, &btime); }
         desc1 = Schedule_Object(1);
-        if (desc1) { Schedule_Recalculate_PV(desc1, wday, &btime); }
 
-        {
-            const solar_config_t *scfg = solar_get_config();
+        if (desc0) {
+            Schedule_Recalculate_PV(desc0, (BACNET_WEEKDAY)bacnet_wday, &btime);
+        }
+        if (desc1) {
+            Schedule_Recalculate_PV(desc1, (BACNET_WEEKDAY)bacnet_wday, &btime);
+        }
 
-            if (scfg->enabled) {
+        update_solar_offsets_from_av();
+        const solar_config_t *scfg = solar_get_config();
+
+        if (scfg->enabled) {
                 bool  is_night   = solar_is_night_now();
-                float solar_val  = is_night ? 100.0f : 0.0f;
 
                 if (btime.hour == 0 && btime.min == 0 && btime.sec == 0) {
                     solar_invalidate_cache();
@@ -204,13 +189,11 @@ static void schedule_task(void *pvParameters)
                 bool solar_transition = (!s_first_cycle && is_night != s_prev_is_night);
                 s_prev_is_night = is_night;
                 s_first_cycle   = false;
-
-#if BACNET_EXCEPTION_SCHEDULE_SIZE > 0
                 bool has_se0 = false;
                 if (is_night && desc0 && desc0->Exception_Count > 0) {
                     float se_pv0  = desc0->Present_Value.type.Real;
                     float se_def0 = desc0->Schedule_Default.type.Real;
-                    if (se_pv0 != se_def0 && se_pv0 > 0.0f) {
+                    if (se_pv0 != se_def0) {
                         has_se0 = true;
                     }
                 }
@@ -218,14 +201,10 @@ static void schedule_task(void *pvParameters)
                 if (is_night && desc1 && desc1->Exception_Count > 0) {
                     float se_pv1  = desc1->Present_Value.type.Real;
                     float se_def1 = desc1->Schedule_Default.type.Real;
-                    if (se_pv1 != se_def1 && se_pv1 > 0.0f) {
+                    if (se_pv1 != se_def1) {
                         has_se1 = true;
                     }
                 }
-#else
-                bool has_se0 = false;
-                bool has_se1 = false;
-#endif
                 /* ── Zone A (AV0 / SCH0) ── */
                 {
                     float target0;
@@ -239,13 +218,18 @@ static void schedule_task(void *pvParameters)
                         }
                     }
                     if (!is_night)       { target0 = 0.0f; }
-                    else if (has_se0)    { target0 = desc0->Present_Value.type.Real; }
-                    else                 { target0 = 100.0f; }
+                    else if (has_se0)    
+                    { 
+                        target0 = desc0->Present_Value.type.Real; }
+                    else                 
+                    { 
+                        target0 = 100.0f; 
+                    }
                     apply_zone_a:;
                     if (target0 != g_prev_pv0) {
                         Analog_Value_Present_Value_Set(0, target0, 16);
                         av_pwm_apply(0, target0);
-                        Multistate_Value_Update_From_AV(0, target0);
+                    
                         if (!is_night && !g_force_pv0) {
                             ESP_LOGI(TAG, "[SOLAR] Zone A → 0%% (JOUR)");
                             rfm_log_event(EVENT_SOLAR_OFF, 0.0f, 0);
@@ -273,20 +257,28 @@ static void schedule_task(void *pvParameters)
                             goto apply_zone_b;
                         }
                     }
-                    if (!is_night)       { target1 = 0.0f; }
-                    else if (has_se1)    { target1 = desc1->Present_Value.type.Real; }
-                    else                 { target1 = 100.0f; }
+                    if (!is_night)       
+                    { 
+                        target1 = 0.0f; 
+                    }
+                    else if (has_se1)    
+                    { 
+                        target1 = desc1->Present_Value.type.Real; 
+                    }
+                    else                
+                    { 
+                        target1 = 100.0f; 
+                    }
                     apply_zone_b:;
                     if (target1 != g_prev_pv1) {
                         Analog_Value_Present_Value_Set(1, target1, 16);
                         av_pwm_apply(1, target1);
-                        Multistate_Value_Update_From_AV(1, target1);
                         rfm_save_av_state(Analog_Value_Present_Value(0), target1);
                         g_prev_pv1 = target1;
                     }
                 }
             }
-        }
+        
 
         trend_log_timer(1);
         Calendar_Update_Present_Value(0);
@@ -297,7 +289,7 @@ static void schedule_task(void *pvParameters)
                 Analog_Value_Present_Value(1));
         }
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
+    vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -323,8 +315,6 @@ static bool network_initialize(void)
 void app_main(void)
 {
 
-  
-    
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES) 
     {
@@ -351,8 +341,16 @@ void app_main(void)
             av_pwm_apply(1, saved_av1);
         }
         ESP_LOGI(TAG, "[BOOT] AV0=%.1f AV1=%.1f", saved_av0, saved_av1);
+        
+        /*initialise   les offsets solaires dans AV:2 et AV:3 */
         sched_persist_restore_all();
         solar_init();
+        const solar_config_t *scfg = solar_get_config();
+        Analog_Value_Present_Value_Set(2, (float)scfg->offset_before_sunset, 16);
+        Analog_Value_Present_Value_Set(3, (float)scfg->offset_after_sunrise, 16);
+        ESP_LOGI(TAG, "[BOOT] Solar offsets: AV2(before_sunset)=%d, AV3(after_sunrise)=%d",
+                 scfg->offset_before_sunset, scfg->offset_after_sunrise);
+        
         setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
         tzset();
         rfm_time_init(false);
@@ -423,5 +421,5 @@ void app_main(void)
 #endif
 
     ESP_LOGI(TAG, "AV0 -> GPIO42 | AV1 -> GPIO41");
-
+    
 }

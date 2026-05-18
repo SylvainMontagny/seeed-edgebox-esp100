@@ -56,7 +56,6 @@
 #include "bv.h"
 #include "schedule.h"
 #include "trendlog.h"
-#include "msv.h"
 #include "calendar.h"
 
 #if defined(__BORLANDC__) || defined(_WIN32)
@@ -199,12 +198,6 @@ static object_functions_t My_Object_Table[] = {
             NULL /* COV */ ,
             NULL /* COV Clear */ ,
         NULL /* Intrinsic Reporting */ },
-        {OBJECT_MULTI_STATE_VALUE,
-	    Multistate_Value_Init, Multistate_Value_Count,
-	    Multistate_Value_Index_To_Instance, Multistate_Value_Valid_Instance,
-	    Multistate_Value_Object_Name, Multistate_Value_Read_Property,
-	    Multistate_Value_Write_Property, Multistate_Value_Property_Lists,
-	    NULL, NULL, NULL, NULL, NULL, NULL },
 	     {OBJECT_CALENDAR,
         Calendar_Init,
         Calendar_Count,

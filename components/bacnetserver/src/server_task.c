@@ -14,7 +14,6 @@
 #include "led.h"
 #include "device.h"
 #include "trendlog.h"
-#include "msv.h"
 #include "calendar.h"
 #include "config.h"
 #include "address.h"
@@ -107,51 +106,6 @@ void server_task(void *arg)
  * Visible dans YABE → Schedule → Weekly Schedule
  * Mis à jour chaque matin à minuit (invalider cache → recalcul)
  * ================================================================ */
- void schedule_update_solar_times(void)
-{
-    solar_times_t st = solar_get_today();
-    if (!st.valid) {
-        ESP_LOGW(TAG, "[SOLAR-SCH] Heures invalides — weekly non mis à jour");
-        return;
-    }
-
-    ESP_LOGI(TAG, "[SOLAR-SCH] Mise à jour Weekly : coucher %02d:%02d → 100%% | lever %02d:%02d → 0%%",
-             st.sunset_h, st.sunset_m, st.sunrise_h, st.sunrise_m);
-
-    for (int sch = 0; sch < 2; sch++) {
-        SCHEDULE_DESCR *desc = Schedule_Object((uint32_t)sch);
-        if (!desc) continue;
-
-        /* Remplir les 7 jours BACnet (index 0=Lundi … 6=Dimanche)
-         * BACNET_WEEKLY_SCHEDULE_SIZE peut être > 7 (défini à 10)
-         * On remplit seulement les 7 premiers slots (un par jour)    */
-        for (int day = 0; day < 7; day++) {
-            BACNET_DAILY_SCHEDULE *ds = &desc->Weekly_Schedule[day];
-            ds->TV_Count = 2;
-
-            /* Entrée 0 : coucher du soleil → allumage à 100% */
-            ds->Time_Values[0].Time.hour       = st.sunset_h;
-            ds->Time_Values[0].Time.min        = st.sunset_m;
-            ds->Time_Values[0].Time.sec        = 0;
-            ds->Time_Values[0].Time.hundredths = 0;
-            ds->Time_Values[0].Value.tag        = BACNET_APPLICATION_TAG_REAL;
-            ds->Time_Values[0].Value.type.Real  = 100.0f;
-
-            /* Entrée 1 : lever du soleil → extinction à 0% */
-            ds->Time_Values[1].Time.hour       = st.sunrise_h;
-            ds->Time_Values[1].Time.min        = st.sunrise_m;
-            ds->Time_Values[1].Time.sec        = 0;
-            ds->Time_Values[1].Time.hundredths = 0;
-            ds->Time_Values[1].Value.tag        = BACNET_APPLICATION_TAG_REAL;
-            ds->Time_Values[1].Value.type.Real  = 0.0f;
-        }
-    }
-}
-
-
-
-
-
 void Init_Service_Handlers(void)
 {
 
@@ -164,14 +118,13 @@ void Init_Service_Handlers(void)
     MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM
 );
 
-    create_bacnet_object(OBJECT_DEVICE, &Object_Table[0], 0);
-    /*create_bacnet_object(OBJECT_DEVICE,&Object_Table[0], 0);
+    create_bacnet_object(OBJECT_DEVICE,&Object_Table[0], 0);
     create_bacnet_object(OBJECT_BINARY_VALUE,&Object_Table[0], 1);
     create_bacnet_object(OBJECT_SCHEDULE,&Object_Table[0], 2);
     create_bacnet_object(OBJECT_CALENDAR,&Object_Table[0], 3);
     create_bacnet_object(OBJECT_TRENDLOG,&Object_Table[0], 4);
-    create_bacnet_object(OBJECT_MULTI_STATE_VALUE,&Object_Table[0], 5);*/
-    create_bacnet_object(OBJECT_ANALOG_VALUE,&Object_Table[0], 1 );
+    create_bacnet_object(OBJECT_ANALOG_VALUE,&Object_Table[0], 5);
+
     Device_Init(&Object_Table[0]);  
 
     heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
@@ -252,13 +205,7 @@ void create_bacnet_object(BACNET_OBJECT_TYPE object_type, object_functions_t *ob
       Trend_Log_Object_Name, Trend_Log_Read_Property, Trend_Log_Write_Property,
       (rpm_property_lists_function)Trend_Log_Property_Lists,
       TrendLogGetRRInfo,NULL, NULL, NULL, NULL, NULL };
-            break;
-        case OBJECT_MULTI_STATE_VALUE:
-            added_object  =  (object_functions_t){OBJECT_MULTI_STATE_VALUE, Multistate_Value_Init, Multistate_Value_Count,
-      Multistate_Value_Index_To_Instance, Multistate_Value_Valid_Instance,
-      Multistate_Value_Object_Name, Multistate_Value_Read_Property,
-      Multistate_Value_Write_Property, Multistate_Value_Property_Lists,
-      NULL, NULL, NULL, NULL, NULL, NULL };
+    
             break;
         default:
             ESP_LOGW(TAG, "Unknown BACnet object type: %d", object_type);

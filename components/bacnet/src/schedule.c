@@ -350,25 +350,6 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             }
             break;
 
-        case PROP_WEEKLY_SCHEDULE: {
-            if (wp_data->array_index == BACNET_ARRAY_ALL) {
-                int offset = 0;
-                int day;
-                for (day = 0; day < BACNET_WEEKLY_SCHEDULE_SIZE; day++) {
-                    int decode_len = bacnet_dailyschedule_context_decode(
-                        wp_data->application_data + offset,
-                        wp_data->application_data_len - offset,
-                        0, &CurrentSC->Weekly_Schedule[day]);
-                    if (decode_len <= 0) break;
-                    offset += decode_len;
-                }
-                status = true;
-                /* Sauvegarde en FRAM */
-                sched_persist_save_weekly(wp_data->object_instance, CurrentSC);
-            }
-            break;
-        }
-
 #if BACNET_EXCEPTION_SCHEDULE_SIZE > 0
         case PROP_EXCEPTION_SCHEDULE: {
             if (wp_data->array_index == BACNET_ARRAY_ALL) {
@@ -499,15 +480,6 @@ static bool calendar_entry_matches(const BACNET_CALENDAR_ENTRY *entry,
 
 /* ================================================================
  * Schedule_Recalculate_PV
- * Priorité : Special Event > Weekly Schedule > Schedule_Default
- * ================================================================ */
-/* ================================================================
- * Schedule_Recalculate_PV
- * Priorité : Special Event > Weekly Schedule > Schedule_Default
- *
- * CORRECTION : parcourt TOUS les Special Events qui matchent la date
- * et garde la valeur associée à l'entrée horaire la plus récente
- * parmi l'ensemble — même si plusieurs SE ont la même date.
  * ================================================================ */
 void Schedule_Recalculate_PV(
     SCHEDULE_DESCR *desc,
@@ -516,7 +488,6 @@ void Schedule_Recalculate_PV(
 {
     int i, j;
     bool se_found  = false;
-    bool wk_found  = false;
     BACNET_TIME se_best_t = {0, 0, 0, 0};
     BACNET_APPLICATION_DATA_VALUE old_value = desc->Present_Value;
     time_t now_t = time(NULL);
@@ -528,61 +499,39 @@ void Schedule_Recalculate_PV(
     desc->Present_Value = desc->Schedule_Default;
 
 #if BACNET_EXCEPTION_SCHEDULE_SIZE > 0
-    /* 2. Parcourir TOUS les Special Events */
-    for (i = 0; i < (int)desc->Exception_Count; i++) {
-        BACNET_SPECIAL_EVENT *se = &desc->Exception_Schedule[i];
-        bool date_match = false;
+        for (i = 0; i < (int)desc->Exception_Count; i++) {
+            BACNET_SPECIAL_EVENT *se = &desc->Exception_Schedule[i];
+            bool date_match = false;
 
-        if (se->periodTag == BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY) {
-            date_match = calendar_entry_matches(&se->period.calendarEntry, t);
-        }
-
-        if (!date_match) continue;
-
-        for (j = 0; j < (int)se->timeValues.TV_Count; j++) {
-            BACNET_TIME *et = &se->timeValues.Time_Values[j].Time;
-
-            if (datetime_compare_time((BACNET_TIME *)btime, et) < 0) continue;
-
-            if (!se_found ||
-                datetime_compare_time(et, &se_best_t) > 0) {
-                se_best_t = *et;
-                desc->Present_Value = se->timeValues.Time_Values[j].Value;
-                se_found = true;
+            if (se->periodTag == BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY) {
+                date_match = calendar_entry_matches(&se->period.calendarEntry, t);
             }
-        }
-    }
 
-    if (se_found) {
-        if (desc->Present_Value.type.Real != old_value.type.Real) {
-            ESP_LOGI("schedule", "SE → %.1f", desc->Present_Value.type.Real);
-        }
-        return;
-    }
-#endif
+            if (!date_match) continue;
 
-    /* 3. Weekly Schedule */
-    if (wday >= 1 && wday <= 7) {
-        int day_idx = wday - 1;
-        BACNET_TIME wk_best_t = {0, 0, 0, 0};
+            for (j = 0; j < (int)se->timeValues.TV_Count; j++) {
+                BACNET_TIME *et = &se->timeValues.Time_Values[j].Time;
 
-        for (i = 0; i < (int)desc->Weekly_Schedule[day_idx].TV_Count; i++) {
-            BACNET_TIME *et = &desc->Weekly_Schedule[day_idx].Time_Values[i].Time;
-            if (datetime_compare_time((BACNET_TIME *)btime, et) >= 0) {
-                if (!wk_found ||
-                    datetime_compare_time(et, &wk_best_t) > 0) {
-                    wk_best_t = *et;
-                    desc->Present_Value =
-                        desc->Weekly_Schedule[day_idx].Time_Values[i].Value;
-                    wk_found = true;
+                if (datetime_compare_time((BACNET_TIME *)btime, et) < 0) continue;
+
+                if (!se_found ||
+                    datetime_compare_time(et, &se_best_t) > 0) {
+                    se_best_t = *et;
+                    desc->Present_Value = se->timeValues.Time_Values[j].Value;
+                    se_found = true;
                 }
             }
         }
-    }
+
+        if (se_found) {
+            if (desc->Present_Value.type.Real != old_value.type.Real) {
+                ESP_LOGI("schedule", "SE → %.1f", desc->Present_Value.type.Real);
+            }
+            return;
+        }
+#endif
 
     if (desc->Present_Value.type.Real != old_value.type.Real) {
-        ESP_LOGI("schedule", "WK → %.1f", desc->Present_Value.type.Real);
+        ESP_LOGI("schedule", "Default → %.1f", desc->Present_Value.type.Real);
     }
-
-    (void)wk_found;
 }

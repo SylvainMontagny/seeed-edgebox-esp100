@@ -364,11 +364,14 @@ static esp_err_t handler_status(httpd_req_t *req)
 static esp_err_t handler_solar_get(httpd_req_t *req)
 {
     const solar_config_t *cfg = solar_get_config();
+    float offset_before_sunset = Analog_Value_Present_Value(2);
+    float offset_after_sunrise  = Analog_Value_Present_Value(3);
+    
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "latitude",             cfg->latitude);
     cJSON_AddNumberToObject(root, "longitude",            cfg->longitude);
-    cJSON_AddNumberToObject(root, "offset_before_sunset", cfg->offset_before_sunset);
-    cJSON_AddNumberToObject(root, "offset_after_sunrise", cfg->offset_after_sunrise);
+    cJSON_AddNumberToObject(root, "offset_before_sunset", offset_before_sunset);
+    cJSON_AddNumberToObject(root, "offset_after_sunrise", offset_after_sunrise);
     cJSON_AddBoolToObject(root,   "enabled",              cfg->enabled);
     char *json = cJSON_Print(root);
     httpd_resp_set_type(req, "application/json");
@@ -408,16 +411,28 @@ static esp_err_t handler_solar_post(httpd_req_t *req)
     }
 
     solar_config_t cfg = *solar_get_config();
+    
+    /*lire offsets actuels depuis les AV */
+    float offset_before_sunset = Analog_Value_Present_Value(2);
+    float offset_after_sunrise  = Analog_Value_Present_Value(3);
 
     cJSON *v;
     if ((v = cJSON_GetObjectItem(root, "latitude")))             cfg.latitude             = (float)v->valuedouble;
     if ((v = cJSON_GetObjectItem(root, "longitude")))            cfg.longitude            = (float)v->valuedouble;
-    if ((v = cJSON_GetObjectItem(root, "offset_before_sunset"))) cfg.offset_before_sunset = (int16_t)v->valueint;
-    if ((v = cJSON_GetObjectItem(root, "offset_after_sunrise"))) cfg.offset_after_sunrise = (int16_t)v->valueint;
+    if ((v = cJSON_GetObjectItem(root, "offset_before_sunset"))) {
+        offset_before_sunset = (float)v->valuedouble;
+    }
+    if ((v = cJSON_GetObjectItem(root, "offset_after_sunrise")))  {
+        offset_after_sunrise = (float)v->valuedouble;
+    }
     if ((v = cJSON_GetObjectItem(root, "enabled")))              cfg.enabled              = cJSON_IsTrue(v) ? 1 : 0;
     cJSON_Delete(root);
 
     solar_save_config(&cfg);
+    
+    /*mettre à jour les AV:2 et AV:3 avec les offsets */
+    Analog_Value_Present_Value_Set(2, offset_before_sunset, 16);
+    Analog_Value_Present_Value_Set(3, offset_after_sunrise, 16);
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Connection", "close");
