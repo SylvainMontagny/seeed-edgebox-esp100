@@ -6,14 +6,14 @@
             "includePath": [
                 "${workspaceFolder}/components/rtc/include",
                 "${workspaceFolder}/components/**/include",
-                "C:/esp/v5.5.4/esp-idf/components/driver/i2c/include",
-                "C:/esp/v5.5.4/esp-idf/components/esp_common/include",
-                "C:/esp/v5.5.4/esp-idf/components/freertos/FreeRTOS-Kernel/include",
-                "C:/esp/v5.5.4/esp-idf/components/esp_system/include",
-                "C:/esp/v5.5.4/esp-idf/components/esp_event/include",
-                "C:/esp/v5.5.4/esp-idf/components/esp_wifi/include",
-                "C:/esp/v5.5.4/esp-idf/components/esp_netif/include",
-                "C:/esp/v5.5.4/esp-idf/components/esp_http_server/include"
+                "${env:IDF_PATH}/components/driver/i2c/include",
+                "${env:IDF_PATH}/components/esp_common/include",
+                "${env:IDF_PATH}/components/freertos/FreeRTOS-Kernel/include",
+                "${env:IDF_PATH}/components/esp_system/include",
+                "${env:IDF_PATH}/components/esp_event/include",
+                "${env:IDF_PATH}/components/esp_wifi/include",
+                "${env:IDF_PATH}/components/esp_netif/include",
+                "${env:IDF_PATH}/components/esp_http_server/include"
             ],
             "defines": [
                 "ARDUINO=0"
@@ -25,7 +25,7 @@
                 "path": [
                     "${workspaceFolder}",
                     "${workspaceFolder}/components",
-                    "C:/esp/v5.5.4/esp-idf/components"
+                    "${env:IDF_PATH}/components"
                 ],
                 "limitSymbolsToIncludedHeaders": true
             }

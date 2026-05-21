@@ -1,5 +1,3 @@
 build/
-sdkconfig
-sdkconfig.old
 managed_components/
 demo.gif
