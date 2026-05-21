@@ -47,27 +47,18 @@
 #include "ntp.h"
 #include "gpiooutputs.h"
 
-
 #define SERVER_DEVICE_ID 1234
 static const char *TAG = "main";
 
-
-/* ================================================================
- * État connexion — partagé entre modem et reconnect_task
- * ================================================================ */
-
-/* Netif PPP — conservé pour pouvoir surveiller l'IP */
-
-extern esp_err_t http_server_start(void);
+/* Reconnect task for the selected network interface */
 
 
 static void reconnect_task(void *pvParameters)
 {
-    ESP_LOGI(TAG, "[RECONNECT] Mode WiFi — reconnexion automatique via event handler");
+    ESP_LOGI(TAG, "[RECONNECT] WiFi mode");
 
     if (!g_connected) {
-        /* Attendre la connexion WiFi initiale */
-        ESP_LOGW(TAG, "[RECONNECT] En attente de connexion WiFi...");
+        ESP_LOGW(TAG, "[RECONNECT] Waiting for WiFi connection...");
         for (;;) {
             vTaskDelay(pdMS_TO_TICKS(5000));
             if (g_connected) break;
@@ -76,8 +67,7 @@ static void reconnect_task(void *pvParameters)
         ntp_initialize();
         rfm_time_init(true);
 
-        /* === Configure BACnet for WiFi interface === */
-        /* Get WiFi IP and set as BACNET interface for proper discovery */
+        /* Set BACnet interface using the current WiFi IP */
         esp_netif_ip_info_t ip_info;
         esp_netif_t *wifi_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
         if (wifi_netif && esp_netif_get_ip_info(wifi_netif, &ip_info) == ESP_OK
@@ -85,7 +75,7 @@ static void reconnect_task(void *pvParameters)
             char ip_str[32];
             esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
             setenv("BACNET_IFACE", ip_str, 1);
-            ESP_LOGI(TAG, "[BACNET] Interface WiFi configurée: %s", ip_str);
+            ESP_LOGI(TAG, "[BACNET] WiFi interface set: %s", ip_str);
         }
 
         dlenv_init();
@@ -93,7 +83,7 @@ static void reconnect_task(void *pvParameters)
         Send_I_Am(&Handler_Transmit_Buffer[0]);
         xTaskCreate(server_task, "bacnet_server", 8000, NULL, 1, NULL);
         g_bacnet_started = true;
-        ESP_LOGI(TAG, "[RECONNECT] BACnet lances");
+        ESP_LOGI(TAG, "[RECONNECT] BACnet started");
     }
 
     for (;;) {
@@ -136,23 +126,20 @@ static void schedule_task(void *pvParameters)
     }
 
     ESP_LOGI(TAG, "================================================");
-    ESP_LOGI(TAG, "Schedule Task demarre | IP 4G: %s", ip_str);
-    ESP_LOGI(TAG, "SCH-0 → AV0/GPIO42 | SCH-1 → AV1/GPIO41");
+    ESP_LOGI(TAG, "Schedule task starting | 4G IP: %s", ip_str);
+    ESP_LOGI(TAG, "SCH-0 -> AV0/GPIO42 | SCH-1 -> AV1/GPIO41");
     ESP_LOGI(TAG, "================================================");
 
     solar_invalidate_cache();
     solar_times_t st_init = solar_get_today();
     if (st_init.valid) {
-        ESP_LOGI(TAG, "[SOLAR] Lever %02d:%02d / Coucher %02d:%02d — is_night=%d",
+        ESP_LOGI(TAG, "[SOLAR] Sunrise %02d:%02d / Sunset %02d:%02d — night=%d",
                  st_init.sunrise_h, st_init.sunrise_m,
-                 st_init.sunset_h,  st_init.sunset_m,
+                 st_init.sunset_h, st_init.sunset_m,
                  (int)solar_is_night_now());
     } else {
-        ESP_LOGW(TAG, "[SOLAR] Calcul invalide — configurer lat/lon sur la page web");
+        ESP_LOGW(TAG, "[SOLAR] Invalid solar calculation — configure location on the web page");
     }
-
-    /* Jour précédent pour détecter le changement de jour → recalcul solaire */
-    int s_prev_mday = -1;
 
     for (;;) {
         now = time(NULL);
@@ -205,13 +192,13 @@ static void schedule_task(void *pvParameters)
                         has_se1 = true;
                     }
                 }
-                /* ── Zone A (AV0 / SCH0) ── */
+                /* Zone A control */
                 {
                     float target0;
                     if (g_force_pv0) {
                         if (solar_transition || has_se0) {
                             g_force_pv0 = false;
-                            ESP_LOGI(TAG, "[FORCE] Zone A : force annule");
+                            ESP_LOGI(TAG, "[FORCE] Zone A: force cancelled");
                         } else {
                             target0 = g_forced_val0;
                             goto apply_zone_a;
@@ -231,13 +218,13 @@ static void schedule_task(void *pvParameters)
                         av_pwm_apply(0, target0);
                     
                         if (!is_night && !g_force_pv0) {
-                            ESP_LOGI(TAG, "[SOLAR] Zone A → 0%% (JOUR)");
+                            ESP_LOGI(TAG, "[SOLAR] Zone A -> 0%% (DAY)");
                             rfm_log_event(EVENT_SOLAR_OFF, 0.0f, 0);
                         } else if (has_se0 && !g_force_pv0) {
-                            ESP_LOGI(TAG, "[SE] Zone A → %.1f%% (NUIT)", target0);
+                            ESP_LOGI(TAG, "[SE] Zone A -> %.1f%% (NIGHT)", target0);
                             rfm_log_event(EVENT_AV0_CHANGE, target0, 0);
                         } else if (!g_force_pv0) {
-                            ESP_LOGI(TAG, "[SOLAR] Zone A → 100%% (NUIT)");
+                            ESP_LOGI(TAG, "[SOLAR] Zone A -> 100%% (NIGHT)");
                             rfm_log_event(EVENT_SOLAR_ON, 100.0f, 0);
                         }
                         rfm_save_av_state(target0, Analog_Value_Present_Value(1));
@@ -245,13 +232,13 @@ static void schedule_task(void *pvParameters)
                     }
                 }
 
-                /* ── Zone B (AV1 / SCH1) ── */
+                /* Zone B control */
                 {
                     float target1;
                     if (g_force_pv1) {
                         if (solar_transition || has_se1) {
                             g_force_pv1 = false;
-                            ESP_LOGI(TAG, "[FORCE] Zone B : force annule");
+                            ESP_LOGI(TAG, "[FORCE] Zone B: force cancelled");
                         } else {
                             target1 = g_forced_val1;
                             goto apply_zone_b;
@@ -293,10 +280,6 @@ static void schedule_task(void *pvParameters)
     }
 }
 
-#ifdef CONFIG_NETWORK_CONNECTION_4G
-
-#endif /* CONFIG_NETWORK_CONNECTION_4G */
-
 /**
  * Initialize network connection based on menuconfig selection.
  * Returns true if connected, false otherwise.
@@ -304,10 +287,10 @@ static void schedule_task(void *pvParameters)
 static bool network_initialize(void)
 {
 #ifdef CONFIG_NETWORK_CONNECTION_WIFI
-    ESP_LOGI(TAG, "[NETWORK] Initialisation WiFi...");
+    ESP_LOGI(TAG, "[NETWORK] WiFi initialisation...");
     return wifi_initialize();
 #else
-    ESP_LOGI(TAG, "[NETWORK] Initialisation 4G/LTE...");
+    ESP_LOGI(TAG, "[NETWORK] 4G/LTE initialisation...");
     return modem_initialize();
 #endif
 }
@@ -341,8 +324,8 @@ void app_main(void)
             av_pwm_apply(1, saved_av1);
         }
         ESP_LOGI(TAG, "[BOOT] AV0=%.1f AV1=%.1f", saved_av0, saved_av1);
-        
-        /*initialise   les offsets solaires dans AV:2 et AV:3 */
+
+        /* Restore solar offsets and schedule state */
         sched_persist_restore_all();
         solar_init();
         const solar_config_t *scfg = solar_get_config();
@@ -357,19 +340,19 @@ void app_main(void)
         rfm_log_event(EVENT_BOOT, 0.0f, 0);
         rfm_dump();
     } else {
-        ESP_LOGE(TAG, "[BOOT] FRAM/RTC indisponible");
+        ESP_LOGE(TAG, "[BOOT] FRAM/RTC unavailable");
     }
 
     bool connected = network_initialize();
 
-    /* Serveur HTTP toujours actif */
+    /* Start the HTTP server for web configuration */
     http_server_start();
 
     if (connected) {
         ntp_initialize();
         rfm_time_init(true);
-        
-        /* === Configure BACnet with current network interface === */
+
+        /* Configure BACnet using the active network interface */
 #ifdef CONFIG_NETWORK_CONNECTION_4G
         /* Get PPP IP address */
         esp_netif_ip_info_t ip_info;
@@ -378,7 +361,7 @@ void app_main(void)
             char ip_str[32];
             esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
             setenv("BACNET_IFACE", ip_str, 1);
-            ESP_LOGI(TAG, "[BACNET] Interface PPP configurée: %s", ip_str);
+            ESP_LOGI(TAG, "[BACNET] PPP interface set: %s", ip_str);
         }
 #else
         /* Get WiFi IP address */
@@ -389,7 +372,7 @@ void app_main(void)
             char ip_str[32];
             esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
             setenv("BACNET_IFACE", ip_str, 1);
-            ESP_LOGI(TAG, "[BACNET] Interface WiFi configurée: %s", ip_str);
+            ESP_LOGI(TAG, "[BACNET] WiFi interface set: %s", ip_str);
         }
 #endif
         
@@ -404,16 +387,13 @@ void app_main(void)
 #endif
 
         g_bacnet_started = true;
-        ESP_LOGI(TAG, "=== Mode CONNECTE — BACnet + Schedule actifs ===");
+        ESP_LOGI(TAG, "=== ONLINE: BACnet + Schedule active ===");
     } else {
-        ESP_LOGW(TAG, "=== Mode HORS-LIGNE — Schedule actif, BACnet inactif ===");
-        ESP_LOGW(TAG, "=== reconnect_task retentera toutes les 2 min ===");
+        ESP_LOGW(TAG, "=== OFFLINE: Schedule active, BACnet inactive ===");
+        ESP_LOGW(TAG, "=== reconnect_task will retry every 2 minutes ===");
     }
-
-    /* Tâche locale — toujours active */
     xTaskCreate(schedule_task, "schedule_task", 4096, NULL, 1, NULL);
 
-    /* ---- MOD 2 : Tâche de reconnexion automatique — toujours active ---- */
 #ifdef CONFIG_NETWORK_CONNECTION_4G
     xTaskCreate(modem_reconnect_task, "reconnect_task", 4096, NULL, 1, NULL);
 #else

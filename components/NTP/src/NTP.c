@@ -14,10 +14,9 @@ void ntp_sync_notification_cb(struct timeval *tv)
 {
     time_t now = tv->tv_sec;
     struct tm *t = localtime(&now);
-    ESP_LOGI(TAG, "[NTP] Synchronise — heure locale: %02d:%02d:%02d",
+    ESP_LOGI(TAG, "[NTP] Synchronized local time: %02d:%02d:%02d",
              t->tm_hour, t->tm_min, t->tm_sec);
     rfm_sync_rtc_from_ntp();
-    /* Recalculer les heures solaires après sync NTP */
     solar_invalidate_cache();
 }
 

@@ -1,11 +1,3 @@
-/*
- * rtc_pcf8563.c
- *
- *  Created on: 4 mars 2026
- *      Author: user
- */
-
-
 #include "rtc_pcf8563.h"
 #include "driver/i2c.h"
 #include "esp_log.h"
@@ -30,7 +22,7 @@ esp_err_t pcf8563_init(void) {
 
 esp_err_t rtc_set_time(uint8_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t min, uint8_t sec) {
     uint8_t data[8] = {
-        0x02, // Registre de départ
+        0x02,
         dec_to_bcd(sec), dec_to_bcd(min), dec_to_bcd(hour),
         dec_to_bcd(day), 0x01, dec_to_bcd(month), dec_to_bcd(year)
     };

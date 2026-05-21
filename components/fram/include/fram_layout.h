@@ -52,7 +52,6 @@ typedef struct __attribute__((packed)) {
     fram_tv_entry_t tv[FRAM_SE_MAX_TV];
 } fram_se_entry_t;
 
-/* Zone config solaire — 16 bytes */
 #define FRAM_SOLAR_CONFIG_ADDR   0x1C60
 
 #endif

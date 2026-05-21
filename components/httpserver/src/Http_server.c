@@ -11,19 +11,13 @@
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "cJSON.h"
+#include "freertos/semphr.h"
 #include <string.h>
 #include <time.h>
 
 extern void av_pwm_apply(uint32_t instance, float percent);
 
-
-/* ================================================================
- * Buffer historique Trend Log — 48 points max (48h à raison de 1/h)
- * Accès thread-safe via spinlock FreeRTOS
- * ================================================================ */
-#include "freertos/semphr.h"
-
-#define TL_HIST_MAX   48   /* 48 points = 48 heures */
+#define TL_HIST_MAX   48
 
 typedef struct {
     char  time_str[10];  /* "HH:MM" */
@@ -38,7 +32,7 @@ static int   s_tl_head  = 0;   /* prochain index d'écriture */
 static int   s_tl_count = 0;   /* entrées valides */
 static SemaphoreHandle_t s_tl_mutex = NULL;
 
-/* Appelé depuis schedule_task toutes les heures */
+/* Called from schedule_task every hour */
 void http_trendlog_record(float av0, float av1)
 {
     if (!s_tl_mutex) {
@@ -62,7 +56,7 @@ void http_trendlog_record(float av0, float av1)
     if (s_tl_count < TL_HIST_MAX) s_tl_count++;
 
     xSemaphoreGive(s_tl_mutex);
-    ESP_LOGI("http_srv", "[TL] Point enregistré %s/%s AV0=%.1f AV1=%.1f", e->date_str, e->time_str, av0, av1);
+    ESP_LOGI("http_srv", "[TL] Entry recorded %s/%s AV0=%.1f AV1=%.1f", e->date_str, e->time_str, av0, av1);
 }
 
 static const char *TAG = "http_srv";
@@ -73,11 +67,9 @@ static const char *TAG = "http_srv";
 
 static httpd_handle_t s_server = NULL;
 
-/* ================================================================
- * Page HTML embarquée
- * ================================================================ */
+/* Embedded web page */
 static const char HTML_PAGE[] =
-"<!DOCTYPE html><html lang='fr'><head>"
+"<!DOCTYPE html><html lang='en'><head>"
 "<meta charset='UTF-8'>"
 "<meta name='viewport' content='width=device-width,initial-scale=1'>"
 "<title>USEDA ROC</title>"
@@ -119,48 +111,46 @@ static const char HTML_PAGE[] =
 ".se-msg{font-size:12px;min-height:16px;margin-top:6px}"
 ".tl-canvas{width:100%;height:120px;background:rgba(0,0,0,0.3);border-radius:8px;margin-top:8px}"
 "</style></head><body>"
-"<header><h1>USEDA ROC Eclairage BACnet</h1><span id='clock'>--:--:--</span></header>"
+"<header><h1>USEDA ROC BACnet Lighting</h1><span id='clock'>--:--:--</span></header>"
 "<div class='grid'>"
-"<div class='card'><h2>Etat des zones</h2>"
+"<div class='card'><h2>Zone Status</h2>"
 "<div class='stat'><span class='stat-label'>Zone A (AV0)</span><span class='stat-value' id='av0'>--%</span></div>"
 "<div class='stat'><span class='stat-label'>Zone B (AV1)</span><span class='stat-value' id='av1'>--%</span></div>"
-"<div class='stat'><span class='stat-label'>Source active</span><span class='stat-value' id='src'>--</span></div>"
-"<div class='stat'><span class='stat-label'>Etat nuit/jour</span><span id='night-badge' class='badge'>--</span></div>"
-"<div class='stat'><span class='stat-label'>Lever / Coucher</span><sol><span class='stat-value' id='sun-times'>--</span></sol></div>"
-"<div class='stat'><span class='stat-label'>Solaire</span><span class='stat-value' id='solar-status'>--</span></div>"
+"<div class='stat'><span class='stat-label'>Night/Day</span><span id='night-badge' class='badge'>--</span></div>"
+"<div class='stat'><span class='stat-label'>Sunrise / Sunset</span><sol><span class='stat-value' id='sun-times'>--</span></sol></div>"
+"<div class='stat'><span class='stat-label'>Solar</span><span class='stat-value' id='solar-status'>--</span></div>"
 "</div>"
-"<div class='card'><h2>Config solaire</h2>"
+"<div class='card'><h2>Solar Config</h2>"
 "<div class='stat'><span class='stat-label'>Latitude</span><input id='lat' style='background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;padding:4px 6px;width:100px;font-size:12px' value='45.78'></div>"
 "<div class='stat'><span class='stat-label'>Longitude</span><input id='lon' style='background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;padding:4px 6px;width:100px;font-size:12px' value='5.93'></div>"
-"<div class='stat'><span class='stat-label'>Decalage coucher (min)</span><input id='off-bef' type='number' style='background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;padding:4px 6px;width:70px;font-size:12px' value='0'></div>"
-"<div class='stat'><span class='stat-label'>Decalage lever (min)</span><input id='off-aft' type='number' style='background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;padding:4px 6px;width:70px;font-size:12px' value='0'></div>"
+"<div class='stat'><span class='stat-label'>Sunset offset (min)</span><input id='off-bef' type='number' style='background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;padding:4px 6px;width:70px;font-size:12px' value='0'></div>"
+"<div class='stat'><span class='stat-label'>Sunrise offset (min)</span><input id='off-aft' type='number' style='background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;padding:4px 6px;width:70px;font-size:12px' value='0'></div>"
 "<div class='btn-row' style='margin-top:10px'>"
-"<button class='btn btn-primary' onclick='saveSolar()'>Sauvegarder</button>"
+"<button class='btn btn-primary' onclick='saveSolar()'>Save</button>"
 "<span id='solar-save-msg' style='font-size:12px;color:#34C759'></span>"
 "</div></div>"
 "<div class='card'><h2>Special Events</h2>"
 "<div class='se-form'>"
-"<div><label class='lbl'>Nom</label><input id='se-name' placeholder='Noel' maxlength='19'></div>"
+"<div><label class='lbl'>Name</label><input id='se-name' placeholder='Christmas' maxlength='19'></div>"
 "<div><label class='lbl'>Schedule</label><select id='se-sch'><option value='0'>SCH0 Zone A</option><option value='1'>SCH1 Zone B</option></select></div>"
 "<div><label class='lbl'>Date</label><input id='se-date' type='date'></div>"
-"<div><label class='lbl'>Heure debut</label><input id='se-time' type='time' value='19:00'></div>"
-"<div><label class='lbl'>Valeur debut (%)</label><input id='se-value' type='number' min='0' max='100' value='75'></div>"
-"<div><label class='lbl'>Heure fin (opt.)</label><input id='se-time-end' type='time'></div>"
-"<div><label class='lbl'>Valeur fin (%)</label><input id='se-value-end' type='number' min='0' max='100' value='0'></div>"
+"<div><label class='lbl'>Start time</label><input id='se-time' type='time' value='19:00'></div>"
+"<div><label class='lbl'>End time (opt.)</label><input id='se-time-end' type='time'></div>"
+"<div><label class='lbl'>Value (%)</label><input id='se-value' type='number' min='0' max='100' value='75'></div>"
 "<div style='display:flex;align-items:flex-end;gap:6px'>"
-"<button class='btn btn-primary' onclick='addSE()' style='flex:1'>Ajouter</button>"
-"<button class='btn btn-danger' onclick='clearAllSE()' style='flex:1'>Effacer tout</button>"
+"<button class='btn btn-primary' onclick='addSE()' style='flex:1'>Add</button>"
+"<button class='btn btn-danger' onclick='clearAllSE()' style='flex:1'>Clear all</button>"
 "</div>"
 "</div>"
 "<div class='se-msg' id='se-msg'></div>"
-"<div id='se-list'><i style='opacity:0.5;font-size:12px'>Chargement...</i></div>"
+"<div id='se-list'><i style='opacity:0.5;font-size:12px'>Loading...</i></div>"
 "</div>"
-"<div class='card'><h2>Journal evenements</h2>"
+"<div class='card'><h2>Event Log</h2>"
 "<div style='max-height:200px;overflow-y:auto'>"
 "<table id='events-table' style='width:100%;font-size:11px;border-collapse:collapse'>"
 "<thead><tr style='opacity:0.6'><td>#</td><td>Date</td><td>Type</td><td>Val.</td></tr></thead>"
 "<tbody></tbody></table></div></div>"
-"<div class='card'><h2>Historique 48h</h2>"
+"<div class='card'><h2>48h History</h2>"
 "<canvas id='tl-canvas' class='tl-canvas'></canvas>"
 "</div>"
 "</div>"
@@ -173,31 +163,27 @@ static const char HTML_PAGE[] =
 "api('/api/status').then(function(d){"
 "document.getElementById('av0').textContent=(d.av0!==undefined?d.av0.toFixed(1):'--')+'%';"
 "document.getElementById('av1').textContent=(d.av1!==undefined?d.av1.toFixed(1):'--')+'%';"
-"document.getElementById('src').textContent=d.source||'--';"
 "var nb=document.getElementById('night-badge');"
-"nb.textContent=d.is_night?'NUIT':'JOUR';"
+"nb.textContent=d.is_night?'NIGHT':'DAY';"
 "nb.className='badge '+(d.is_night?'badge-night':'badge-day');"
 "document.getElementById('sun-times').textContent=(d.sunrise||'--')+' / '+(d.sunset||'--');"
-"document.getElementById('solar-status').textContent=d.solar_enabled?'Actif':'Desactive';"
-"var fi=document.getElementById('force-info');"
-"if(d.force0||d.force1){fi.textContent='Forcage actif -- sera ecrase au lever/coucher';fi.style.color='#34C759';}"
-"else{fi.textContent='Forcer une valeur -- sera ecrase au lever/coucher';fi.style.color='';}"
+"document.getElementById('solar-status').textContent=d.solar_enabled?'Enabled':'Disabled';"
 "}).catch(function(e){console.log('status err',e);});}"
 "function loadSolarConfig(){"
 "api('/api/solar').then(function(d){"
 "if(d.latitude!==undefined)document.getElementById('lat').value=d.latitude;"
 "if(d.longitude!==undefined)document.getElementById('lon').value=d.longitude;"
-"if(d.offset_before!==undefined)document.getElementById('off-bef').value=d.offset_before;"
-"if(d.offset_after!==undefined)document.getElementById('off-aft').value=d.offset_after;"
+"if(d.offset_before_sunset!==undefined)document.getElementById('off-bef').value=d.offset_before_sunset;"
+"if(d.offset_after_sunrise!==undefined)document.getElementById('off-aft').value=d.offset_after_sunrise;"
 "}).catch(function(e){console.log('solar err',e);});}"
 "function saveSolar(){"
 "var b={latitude:parseFloat(document.getElementById('lat').value),"
 "longitude:parseFloat(document.getElementById('lon').value),"
-"offset_before:parseInt(document.getElementById('off-bef').value),"
-"offset_after:parseInt(document.getElementById('off-aft').value)};"
+"offset_before_sunset:parseInt(document.getElementById('off-bef').value),"
+"offset_after_sunrise:parseInt(document.getElementById('off-aft').value)};"
 "api('/api/solar','POST',b).then(function(d){"
 "var m=document.getElementById('solar-save-msg');"
-"m.textContent=d.ok?'Sauvegarde !':'Erreur';"
+"m.textContent=d.ok?'Saved!':'Error';"
 "setTimeout(function(){m.textContent='';},3000);"
 "}).catch(function(e){console.log(e);});}"
 "function setAV(inst){"
@@ -211,7 +197,7 @@ static const char HTML_PAGE[] =
 "var list=document.getElementById('se-list');"
 "if(!list)return;"
 "var sch0=d.sch0||[];var sch1=d.sch1||[];"
-"if(!sch0.length&&!sch1.length){list.innerHTML='<i style=\"opacity:0.5;font-size:12px\">Aucun Special Event</i>';return;}"
+"if(!sch0.length&&!sch1.length){list.innerHTML='<i style=\"opacity:0.5;font-size:12px\">No Special Events</i>';return;}"
 "var all=sch0.map(function(e){return Object.assign({},e,{sch:0});}).concat(sch1.map(function(e){return Object.assign({},e,{sch:1});}));"
 "list.innerHTML='';"
 "all.forEach(function(se,i){"
@@ -227,28 +213,29 @@ static const char HTML_PAGE[] =
 "}).catch(function(e){console.log('se err',e);});}"
 "function addSE(){"
 "var dt=document.getElementById('se-date').value;"
-"if(!dt){alert('Choisir une date');return;}"
+"if(!dt){alert('Choose a date');return;}"
 "var p=dt.split('-').map(Number);"
 "var tm=document.getElementById('se-time').value.split(':').map(Number);"
 "var te=document.getElementById('se-time-end').value;"
 "var nm=document.getElementById('se-name').value.replace(/[^\x20-\x7E]/g,'').substring(0,19)||'SE';"
+"var value=parseFloat(document.getElementById('se-value').value)||75;"
 "var body={schedule:parseInt(document.getElementById('se-sch').value),"
 "year:p[0]-1900,month:p[1],day:p[2],hour:tm[0],min:tm[1],"
-"value:parseFloat(document.getElementById('se-value').value)||75,"
+"value:value,"
 "priority:16,name:nm,"
 "has_end:te?1:0,"
 "hour_end:te?parseInt(te.split(':')[0]):0,"
 "min_end:te?parseInt(te.split(':')[1]):0,"
-"value_end:parseFloat(document.getElementById('se-value-end').value)||0};"
+"value_end:value};"
 "api('/api/special_events','POST',body).then(function(r){"
 "var m=document.getElementById('se-msg');"
 "m.style.color=r.ok?'#34C759':'#ff3b30';"
-"m.textContent=r.ok?'SE ajoute !':'Erreur: '+(r.error||'?');"
+"m.textContent=r.ok?'SE added!':'Error: '+(r.error||'?');"
 "setTimeout(function(){m.textContent='';},5000);"
 "if(r.ok)loadSE();"
 "}).catch(function(e){console.log(e);});}"
 "function clearAllSE(){"
-"if(!confirm('Effacer tous les SE ?'))return;"
+"if(!confirm('Clear all special events?'))return;"
 "api('/api/se_clear','POST',{schedule:0}).then(function(){"
 "api('/api/se_clear','POST',{schedule:1}).then(function(){loadSE();});"
 "}).catch(function(e){console.log(e);});}"
@@ -303,7 +290,7 @@ static esp_err_t handler_root(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     httpd_resp_set_hdr(req, "Connection", "close");
-    /* Envoi par chunks pour eviter EAGAIN sur grande page */
+    /* Send in chunks to avoid EAGAIN on large pages */
     const char *ptr = HTML_PAGE;
     size_t remaining = strlen(HTML_PAGE);
     const size_t CHUNK = 1024;
@@ -325,13 +312,7 @@ static esp_err_t handler_status(httpd_req_t *req)
 {
     solar_times_t st = solar_get_today();
     const solar_config_t *scfg = solar_get_config();
-    bool manual = Binary_Value_Is_Control_Enabled();
     bool is_night = solar_is_night_now();
-
-    /* Déterminer la source active */
-    const char *source = "Default";
-    if (manual) source = "Manuel";
-    else if (is_night && scfg->enabled) source = "Solaire";
 
     char rise_str[8] = "--:--";
     char set_str[8]  = "--:--";
@@ -343,8 +324,6 @@ static esp_err_t handler_status(httpd_req_t *req)
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "av0",           Analog_Value_Present_Value(0));
     cJSON_AddNumberToObject(root, "av1",           Analog_Value_Present_Value(1));
-    cJSON_AddBoolToObject(root,   "manual",        manual);
-    cJSON_AddStringToObject(root, "source",        source);
     cJSON_AddStringToObject(root, "sunrise",       rise_str);
     cJSON_AddStringToObject(root, "sunset",        set_str);
     cJSON_AddBoolToObject(root,   "is_night",      is_night);
@@ -382,7 +361,7 @@ static esp_err_t handler_solar_get(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* Lire le body d'une requête */
+/* Read the body of a request */
 static int read_body(httpd_req_t *req, char *buf, int max_len)
 {
     int received = 0;
@@ -406,13 +385,13 @@ static esp_err_t handler_solar_post(httpd_req_t *req)
 
     cJSON *root = cJSON_Parse(buf);
     if (!root) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "JSON invalide");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_OK;
     }
 
     solar_config_t cfg = *solar_get_config();
     
-    /*lire offsets actuels depuis les AV */
+    /* read current offsets from AVs */
     float offset_before_sunset = Analog_Value_Present_Value(2);
     float offset_after_sunrise  = Analog_Value_Present_Value(3);
 
@@ -421,8 +400,12 @@ static esp_err_t handler_solar_post(httpd_req_t *req)
     if ((v = cJSON_GetObjectItem(root, "longitude")))            cfg.longitude            = (float)v->valuedouble;
     if ((v = cJSON_GetObjectItem(root, "offset_before_sunset"))) {
         offset_before_sunset = (float)v->valuedouble;
+    } else if ((v = cJSON_GetObjectItem(root, "offset_before"))) {
+        offset_before_sunset = (float)v->valuedouble;
     }
     if ((v = cJSON_GetObjectItem(root, "offset_after_sunrise")))  {
+        offset_after_sunrise = (float)v->valuedouble;
+    } else if ((v = cJSON_GetObjectItem(root, "offset_after"))) {
         offset_after_sunrise = (float)v->valuedouble;
     }
     if ((v = cJSON_GetObjectItem(root, "enabled")))              cfg.enabled              = cJSON_IsTrue(v) ? 1 : 0;
@@ -430,7 +413,7 @@ static esp_err_t handler_solar_post(httpd_req_t *req)
 
     solar_save_config(&cfg);
     
-    /*mettre à jour les AV:2 et AV:3 avec les offsets */
+    /* update AV:2 and AV:3 with the offsets */
     Analog_Value_Present_Value_Set(2, offset_before_sunset, 16);
     Analog_Value_Present_Value_Set(3, offset_after_sunrise, 16);
 
@@ -445,7 +428,7 @@ static esp_err_t handler_solar_post(httpd_req_t *req)
 static esp_err_t handler_events(httpd_req_t *req)
 {
     static const char *ENAMES[] = {
-        "?", "AV0_CHANGE", "AV1_CHANGE", "MODE_CHANGE",
+        "?", "AV0_CHANGE", "AV1_CHANGE", "CONTROL_CHANGE",
         "BOOT", "NTP_SYNC", "4G_LOST", "SOLAR_ON", "SOLAR_OFF"
     };
 
@@ -456,7 +439,7 @@ static esp_err_t handler_events(httpd_req_t *req)
     cJSON *root  = cJSON_CreateObject();
     cJSON *arr   = cJSON_CreateArray();
 
-    /* Lire les 30 derniers événements */
+    /* Read the last 30 events */
     int shown = 0;
     for (int i = FRAM_EVENT_MAX_ENTRIES - 1; i >= 0 && shown < 30; i--) {
         uint16_t idx  = (uint16_t)((head + i) % FRAM_EVENT_MAX_ENTRIES);
@@ -476,7 +459,7 @@ static esp_err_t handler_events(httpd_req_t *req)
 
         char val_str[16];
         if (e.event_type == EVENT_MODE_CHANGE)
-            snprintf(val_str, sizeof(val_str), "%s", e.extra_u8 ? "MANUEL" : "AUTO");
+            snprintf(val_str, sizeof(val_str), "%s", e.extra_u8 ? "OVERRIDE" : "AUTO");
         else
             snprintf(val_str, sizeof(val_str), "%.1f%%", e.value);
 
@@ -499,7 +482,7 @@ static esp_err_t handler_events(httpd_req_t *req)
 }
 
 /* ================================================================
- * Démarrage / arrêt
+ * Startup / shutdown
  * ================================================================ */
 
 /* ================================================================
@@ -514,7 +497,7 @@ static esp_err_t handler_se_get(httpd_req_t *req)
     cJSON *arr1 = cJSON_CreateArray();
 
     for (int sch = 0; sch < 2; sch++) {
-        // On récupère l'objet Schedule (0 ou 1) mis à jour par Node-RED
+        // Retrieve the Schedule object (0 or 1) updated by Node-RED
         SCHEDULE_DESCR *desc = Schedule_Object(sch);
         cJSON *arr = (sch == 0) ? arr0 : arr1;
         
@@ -524,27 +507,26 @@ static esp_err_t handler_se_get(httpd_req_t *req)
         for (int i = 0; i < (int)desc->Exception_Count; i++) {
             BACNET_SPECIAL_EVENT *se = &desc->Exception_Schedule[i];
             
-            // On ne traite que les entrées de type calendrier (Date fixe)
+            // Only process calendar entries (fixed dates)
             if (se->periodTag != BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY) continue;
             if (se->period.calendarEntry.tag != BACNET_CALENDAR_DATE) continue;
 
             cJSON *entry = cJSON_CreateObject();
             
-            // 1. Récupération de la Date (BACnet year = Year - 1900)
-           // 1. Récupération de la Date
+            // 1. Retrieve the date (BACnet year = year - 1900)
             char date_str[16];
             int yr = se->period.calendarEntry.type.Date.year;
             int mo = se->period.calendarEntry.type.Date.month;
             int dy = se->period.calendarEntry.type.Date.day;
 
-            // Si l'année est < 1900 (ex: 126), on ajoute 1900. Sinon on garde tel quel.
+            // If the year is < 1900 (e.g. 126), add 1900. Otherwise keep as is.
             int display_year = (yr < 1900) ? (yr + 1900) : yr;
 
             snprintf(date_str, sizeof(date_str), "%04d-%02d-%02d", 
                      display_year, mo, dy);
             cJSON_AddStringToObject(entry, "date", date_str);
 
-            // 2. Récupération de l'Heure et de la Valeur (Premier point)
+            // 2. Retrieve time and value (first point)
             if (se->timeValues.TV_Count > 0) {
                 char time_str[10];
                 snprintf(time_str, sizeof(time_str), "%02d:%02d", 
@@ -554,7 +536,7 @@ static esp_err_t handler_se_get(httpd_req_t *req)
                 cJSON_AddNumberToObject(entry, "value", se->timeValues.Time_Values[0].Value.type.Real);
             }
 
-            // 3. Point de fin (si présent)
+            // 3. End point (if present)
             if (se->timeValues.TV_Count >= 2) {
                 char time_end_str[10];
                 snprintf(time_end_str, sizeof(time_end_str), "%02d:%02d",
@@ -588,11 +570,11 @@ static esp_err_t handler_se_post(httpd_req_t *req)
     if (read_body(req, buf, sizeof(buf)) < 0) return ESP_FAIL;
     cJSON *root = cJSON_Parse(buf);
     if (!root) { 
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "JSON invalide"); 
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON"); 
         return ESP_FAIL; 
     }
 
-    // Récupération des données avec valeurs par défaut
+    // Retrieve data with default values
     int   sch     = cJSON_GetObjectItem(root, "schedule")  ? cJSON_GetObjectItem(root, "schedule")->valueint  : 0;
     int   yr      = cJSON_GetObjectItem(root, "year")      ? cJSON_GetObjectItem(root, "year")->valueint      : 126; // 2026
     int   mo      = cJSON_GetObjectItem(root, "month")     ? cJSON_GetObjectItem(root, "month")->valueint     : 1;
@@ -601,14 +583,14 @@ static esp_err_t handler_se_post(httpd_req_t *req)
     int   mn      = cJSON_GetObjectItem(root, "min")       ? cJSON_GetObjectItem(root, "min")->valueint       : 0;
     float val     = cJSON_GetObjectItem(root, "value")     ? (float)cJSON_GetObjectItem(root, "value")->valuedouble : 0.0f;
     
-    // Sécurité Priorité : Si 0 ou absent, on force 16
+    // Priority safety: if 0 or missing, force 16
     int   prio    = cJSON_GetObjectItem(root, "priority")  ? cJSON_GetObjectItem(root, "priority")->valueint  : 16;
     if (prio < 1 || prio > 16) prio = 16; 
 
     int   has_end = cJSON_GetObjectItem(root, "has_end")   ? cJSON_GetObjectItem(root, "has_end")->valueint   : 0;
     int   hr_end  = cJSON_GetObjectItem(root, "hour_end")  ? cJSON_GetObjectItem(root, "hour_end")->valueint  : 0;
     int   mn_end  = cJSON_GetObjectItem(root, "min_end")   ? cJSON_GetObjectItem(root, "min_end")->valueint   : 0;
-    float val_end = cJSON_GetObjectItem(root, "value_end") ? (float)cJSON_GetObjectItem(root, "value_end")->valuedouble : 0.0f;
+    float val_end = cJSON_GetObjectItem(root, "value_end") ? (float)cJSON_GetObjectItem(root, "value_end")->valuedouble : val;
     
     const char *se_name = (cJSON_GetObjectItem(root, "name") && cJSON_GetObjectItem(root, "name")->valuestring)
                           ? cJSON_GetObjectItem(root, "name")->valuestring : "SE";
@@ -628,7 +610,7 @@ static esp_err_t handler_se_post(httpd_req_t *req)
 
 #if BACNET_EXCEPTION_SCHEDULE_SIZE > 0
     if (desc->Exception_Count >= BACNET_EXCEPTION_SCHEDULE_SIZE) {
-        httpd_resp_sendstr(req, "{\"ok\":false,\"error\":\"liste_pleine\"}"); 
+        httpd_resp_sendstr(req, "{\"ok\":false,\"error\":\"list_full\"}"); 
         return ESP_OK; 
     }
 
@@ -636,7 +618,7 @@ static esp_err_t handler_se_post(httpd_req_t *req)
     BACNET_SPECIAL_EVENT *se = &desc->Exception_Schedule[idx];
     memset(se, 0, sizeof(BACNET_SPECIAL_EVENT));
 
-    // Configuration de l'événement
+    // Configure the event
     se->periodTag = BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY;
     se->period.calendarEntry.tag             = BACNET_CALENDAR_DATE;
     se->period.calendarEntry.type.Date.year  = (uint8_t)yr;
@@ -644,10 +626,10 @@ static esp_err_t handler_se_post(httpd_req_t *req)
     se->period.calendarEntry.type.Date.day   = (uint8_t)dy;
     se->period.calendarEntry.type.Date.wday  = 255; // N'importe quel jour de la semaine
     
-    // APPLICATION DE LA PRIORITE (Correction de l'erreur)
+    // Apply priority (fix previous issue)
     se->priority = (uint8_t)prio; 
 
-    // Premier point (Début)
+    // First point (start)
     se->timeValues.TV_Count = 1;
     se->timeValues.Time_Values[0].Time.hour       = (uint8_t)hr;
     se->timeValues.Time_Values[0].Time.min        = (uint8_t)mn;
@@ -656,7 +638,7 @@ static esp_err_t handler_se_post(httpd_req_t *req)
     se->timeValues.Time_Values[0].Value.tag       = BACNET_APPLICATION_TAG_REAL;
     se->timeValues.Time_Values[0].Value.type.Real = val;
 
-    // Deuxième point (Fin optionnelle)
+    // Second point (optional end)
     if (has_end && hr_end >= 0 && hr_end <= 23) {
         se->timeValues.TV_Count = 2;
         se->timeValues.Time_Values[1].Time.hour       = (uint8_t)hr_end;
@@ -669,16 +651,16 @@ static esp_err_t handler_se_post(httpd_req_t *req)
 
     desc->Exception_Count = (uint8_t)(idx + 1);
 
-    // Sauvegarde en mémoire FRAM
+    // Save to FRAM
     sched_persist_save_special_events((uint32_t)sch, desc);
     
-    // Sauvegarde du nom de l'événement en FRAM
+    // Save the event name to FRAM
     uint16_t name_addr = (uint16_t)(0x1E00 + sch * 5 * 21 + idx * 21);
     uint8_t name_buf[21] = {0};
     strncpy((char*)name_buf, se_name, 20);
     fram_write(name_addr, name_buf, 21);
 
-    ESP_LOGI(TAG, "SE ajouté SCH%d | Nom: %s | Prio: %d | Val: %.1f%%", sch, se_name, prio, val);
+    ESP_LOGI(TAG, "SE added SCH%d | Name: %s | Prio: %d | Val: %.1f%%", sch, se_name, prio, val);
 #endif
 
     httpd_resp_set_type(req, "application/json");
@@ -692,7 +674,7 @@ static esp_err_t handler_se_delete(httpd_req_t *req)
     char buf[64];
     if (read_body(req, buf, sizeof(buf)) < 0) return ESP_FAIL;
     cJSON *root = cJSON_Parse(buf);
-    if (!root) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "JSON"); return ESP_FAIL; }
+    if (!root) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON"); return ESP_FAIL; }
     int sch = cJSON_GetObjectItem(root, "schedule") ? cJSON_GetObjectItem(root, "schedule")->valueint : 0;
     int idx = cJSON_GetObjectItem(root, "index")    ? cJSON_GetObjectItem(root, "index")->valueint    : -1;
     cJSON_Delete(root);
@@ -792,7 +774,7 @@ esp_err_t http_server_start(void)
     config.max_open_sockets = 3;
 
     if (httpd_start(&s_server, &config) != ESP_OK) {
-        ESP_LOGE(TAG, "Echec démarrage serveur HTTP");
+        ESP_LOGE(TAG, "Failed to start HTTP server");
         return ESP_FAIL;
     }
 
@@ -801,7 +783,7 @@ esp_err_t http_server_start(void)
         { .uri="/",           .method=HTTP_GET,  .handler=handler_root    },
         { .uri="/api/status", .method=HTTP_GET,  .handler=handler_status  },
         { .uri="/api/solar",  .method=HTTP_GET,  .handler=handler_solar_get},
-        { .uri="/api/solar",  .method=HTTP_POST, .handler=handler_solar_post},
+        { .uri="/api/solar",    .method=HTTP_POST, .handler=handler_solar_post},
         { .uri="/api/events",         .method=HTTP_GET,  .handler=handler_events    },
         { .uri="/api/special_events", .method=HTTP_GET,  .handler=handler_se_get    },
         { .uri="/api/special_events", .method=HTTP_POST, .handler=handler_se_post   },
@@ -814,7 +796,7 @@ esp_err_t http_server_start(void)
         httpd_register_uri_handler(s_server, &routes[i]);
     }
 
-    ESP_LOGI(TAG, "Serveur HTTP demarré sur port 80");
+    ESP_LOGI(TAG, "HTTP server started on port 80");
     return ESP_OK;
 }
 

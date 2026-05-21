@@ -17,27 +17,21 @@
 #include "tsm.h"
 #include "net.h"
 #include "txbuf.h"
+#include "sdkconfig.h"
 
-// External functions
 extern void ntp_initialize(void);
 extern void rfm_time_init(bool);
 extern void solar_invalidate_cache(void);
 
-// Fallback stub when the solar scheduling implementation is missing.
 static const char *TAG = "modem";
 
-// Local TAG for logging
-
-
-// Global variables
 volatile bool g_connected = false;
 volatile bool g_bacnet_started = false;
 esp_netif_t *g_ppp_netif = NULL;
 esp_modem_dce_t *g_ppp_dce = NULL;
 
-// Ping-related globals
-volatile int  g_ping_fail_count  = 0;
-volatile bool g_link_lost        = false;
+volatile int  g_ping_fail_count = 0;
+volatile bool g_link_lost = false;
 esp_ping_handle_t g_ping_handle = NULL;
 
 static void ping_success_cb(esp_ping_handle_t hdl, void *args)
@@ -51,7 +45,6 @@ static void ping_success_cb(esp_ping_handle_t hdl, void *args)
     esp_ping_get_profile(hdl, ESP_PING_PROF_IPADDR,  &target_addr,  sizeof(target_addr));
     ESP_LOGI(TAG, "[PING] %lu bytes from %s : seq=%d ttl=%d time=%lu ms",
              recv_len, inet_ntoa(target_addr.u_addr.ip4), seq, ttl, elapsed_time);
-    /* Ping OK → réinitialiser le compteur d'échecs */
     g_ping_fail_count = 0;
     g_link_lost = false;
 }
@@ -61,12 +54,12 @@ static void ping_timeout_cb(esp_ping_handle_t hdl, void *args)
     uint16_t seq; ip_addr_t target_addr;
     esp_ping_get_profile(hdl, ESP_PING_PROF_SEQNO,  &seq,         sizeof(seq));
     esp_ping_get_profile(hdl, ESP_PING_PROF_IPADDR, &target_addr, sizeof(target_addr));
-    ESP_LOGW(TAG, "[PING] Timeout — seq=%d vers %s", seq, inet_ntoa(target_addr.u_addr.ip4));
+    ESP_LOGW(TAG, "[PING] Timeout - seq=%d to %s", seq, inet_ntoa(target_addr.u_addr.ip4));
     g_ping_fail_count++;
     if (g_ping_fail_count >= 3 && !g_link_lost) {
         g_link_lost = true;
         g_connected = false;
-        ESP_LOGE(TAG, "[4G] CONNEXION PERDUE (3 pings KO) — mode NO_DATA");
+        ESP_LOGE(TAG, "[4G] Connection lost (3 ping failures)");
         rfm_log_event(EVENT_4G_LOST, 0.0f, 0);
     }
 }
@@ -79,7 +72,7 @@ static void ping_task(void *pvParameters)
     esp_ping_config_t config = ESP_PING_DEFAULT_CONFIG();
     config.target_addr     = target_addr;
     config.count           = ESP_PING_COUNT_INFINITE;
-    config.interval_ms     = 1800000;   /* toutes les 30 min  */
+    config.interval_ms     = 1800000;   /* 30 minutes */
     config.timeout_ms      = 5000;
     config.task_stack_size = 4096;
     config.task_prio       = 1;
@@ -92,7 +85,7 @@ static void ping_task(void *pvParameters)
     esp_err_t err = esp_ping_new_session(&config, &cbs, &g_ping_handle);
     if (err != ESP_OK) { vTaskDelete(NULL); return; }
     esp_ping_start(g_ping_handle);
-    ESP_LOGI(TAG, "[PING] Demarre → 8.8.8.8 toutes les 30s");
+    ESP_LOGI(TAG, "[PING] Started - 8.8.8.8 every 30 minutes");
     for (;;) { vTaskDelay(pdMS_TO_TICKS(3600000)); }
 }
 
@@ -101,22 +94,23 @@ void modem_start_ping_task(void)
     xTaskCreate(ping_task, "ping_task", 4096, NULL, 1, NULL);
 }
 
-/* Tente un seul power-cycle + connexion PPP.
- * Retourne true si une IP est obtenue. */
+/* Try a single power-cycle + PPP connection. Returns true if an IP is obtained. */
 bool modem_try_once(void)
 {
     gpio_reset_pin(MODEM_TX_PIN);
     gpio_reset_pin(MODEM_RX_PIN);
-    ESP_LOGI(TAG, "[4G] Power cycle...");
-    gpio_set_level((gpio_num_t)MODEM_PWR_EN,  0); vTaskDelay(pdMS_TO_TICKS(3000));
-    gpio_set_level((gpio_num_t)MODEM_PWR_EN,  1); vTaskDelay(pdMS_TO_TICKS(1000));
-    gpio_set_level((gpio_num_t)MODEM_PWR_KEY, 1); vTaskDelay(pdMS_TO_TICKS(1500));
+    ESP_LOGI(TAG, "[4G] Power cycling modem...");
+    gpio_set_level((gpio_num_t)MODEM_PWR_EN,  0); 
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    gpio_set_level((gpio_num_t)MODEM_PWR_EN,  1); 
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    gpio_set_level((gpio_num_t)MODEM_PWR_KEY, 1); 
+    vTaskDelay(pdMS_TO_TICKS(1500));
     gpio_set_level((gpio_num_t)MODEM_PWR_KEY, 0);
 
-    ESP_LOGI(TAG, "[4G] Attente boot modem (45s)...");
+    ESP_LOGI(TAG, "[4G] Waiting for modem boot (45s)...");
     vTaskDelay(pdMS_TO_TICKS(45000));
 
-    /* Nettoyer l'ancien DCE/netif si existant */
     if (g_ppp_dce) {
         esp_modem_destroy(g_ppp_dce);
         g_ppp_dce = NULL;
@@ -134,34 +128,32 @@ bool modem_try_once(void)
     esp_netif_config_t ppp_cfg = ESP_NETIF_DEFAULT_PPP();
     g_ppp_netif = esp_netif_new(&ppp_cfg);
 
-    esp_modem_dce_config_t dce_config = ESP_MODEM_DCE_DEFAULT_CONFIG(MODEM_APN);
-    g_ppp_dce = esp_modem_new_dev(
-        ESP_MODEM_DCE_SIM7600, &dte_config, &dce_config, g_ppp_netif);
+    esp_modem_dce_config_t dce_config = ESP_MODEM_DCE_DEFAULT_CONFIG(CONFIG_MODEM_APN);
+    g_ppp_dce = esp_modem_new_dev(ESP_MODEM_DCE_SIM7600, &dte_config, &dce_config, g_ppp_netif);
 
     if (!g_ppp_dce) {
-        ESP_LOGE(TAG, "[4G] Echec DCE");
+        ESP_LOGE(TAG, "[4G] DCE init failed");
         if (g_ppp_netif) { esp_netif_destroy(g_ppp_netif); g_ppp_netif = NULL; }
         return false;
     }
 
     if (esp_modem_set_mode(g_ppp_dce, ESP_MODEM_MODE_DATA) != ESP_OK) {
-        ESP_LOGE(TAG, "[4G] Echec DATA");
+        ESP_LOGE(TAG, "[4G] Failed to set DATA mode");
         esp_modem_destroy(g_ppp_dce);  g_ppp_dce = NULL;
         esp_netif_destroy(g_ppp_netif); g_ppp_netif = NULL;
         return false;
     }
 
+    ESP_LOGI(TAG, "[4G] Waiting for IP address (30s)...");
     esp_netif_ip_info_t ip_info;
     for (int i = 0; i < 30; i++) {
         vTaskDelay(pdMS_TO_TICKS(1000));
-        if (esp_netif_get_ip_info(g_ppp_netif, &ip_info) == ESP_OK
-            && ip_info.ip.addr != 0) {
+        if (esp_netif_get_ip_info(g_ppp_netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
             char ip_str[32];
             esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
-            ESP_LOGI(TAG, "[4G] CONNECTE ! IP: %s", ip_str);
+            ESP_LOGI(TAG, "[4G] CONNECTED - IP: %s", ip_str);
             return true;
         }
-        ESP_LOGI(TAG, "[4G] Attente IP... (%d/30)", i+1);
     }
 
     esp_modem_destroy(g_ppp_dce);  g_ppp_dce = NULL;
@@ -171,40 +163,40 @@ bool modem_try_once(void)
 
 bool modem_initialize(void)
 {
-    ESP_LOGI(TAG, "[4G] Initialisation modem SIM7600...");
+    ESP_LOGI(TAG, "[4G] Initializing SIM7600 modem...");
     gpio_set_direction((gpio_num_t)MODEM_PWR_EN,  GPIO_MODE_OUTPUT);
     gpio_set_direction((gpio_num_t)MODEM_PWR_KEY, GPIO_MODE_OUTPUT);
 
     for (int attempt = 1; attempt <= 2; attempt++) {
-        ESP_LOGI(TAG, "[4G] Tentative %d/2", attempt);
+        ESP_LOGI(TAG, "[4G] Attempt %d/2", attempt);
         if (modem_try_once()) {
             g_connected = true;
             return true;
         }
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
-    ESP_LOGW(TAG, "[4G] Echec — mode hors-ligne");
+    ESP_LOGW(TAG, "[4G] Failed - offline mode");
     return false;
 }
 
 /* ================================================================
- * Tâche de reconnexion automatique pour 4G
+ * Automatic reconnect task for 4G
  *
- * - Toutes les 1800s : vérifie l'état (ping déjà géré par ping_task)
- * - Si g_link_lost : attend 2 minutes puis tente modem_try_once()
- * - Si succès : NTP + I_Am BACnet → reprend normalement
+ * - Every 1800s: check status (ping handled by ping_task)
+ * - If g_link_lost: wait 2 minutes then call modem_try_once()
+ * - On success: NTP + BACnet I_Am -> resume normal operation
  * ================================================================ */
 void modem_reconnect_task(void *pvParameters)
 {
     if (!g_connected) {
-        /* ── Cas 2 : hors-ligne dès le boot ── */
-        ESP_LOGW(TAG, "[RECONNECT] Demarrage hors-ligne — tentatives toutes les 2 min");
+        /* Offline at boot */
+        ESP_LOGW(TAG, "[RECONNECT] Starting offline - attempts every 2 minutes");
         for (;;) {
             vTaskDelay(pdMS_TO_TICKS(120000));  /* 2 minutes */
 
-            if (g_connected) break;             /* connexion établie entre-temps */
+            if (g_connected) break;
 
-            ESP_LOGI(TAG, "[RECONNECT] Tentative de connexion (hors-ligne)...");
+            ESP_LOGI(TAG, "[RECONNECT] Attempting connection (offline)...");
 
             bool ok = modem_try_once();
             if (ok) {
@@ -216,54 +208,54 @@ void modem_reconnect_task(void *pvParameters)
                 rfm_time_init(true);
 
                 if (!g_bacnet_started) {
-                    /*get PPP IP address and set it as BACNET interface */
+                    /* get PPP IP address and set as BACNET interface */
                     esp_netif_ip_info_t ip_info;
                     if (g_ppp_netif && esp_netif_get_ip_info(g_ppp_netif, &ip_info) == ESP_OK 
                         && ip_info.ip.addr != 0) {
                         char ip_str[32];
                         esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
                         setenv("BACNET_IFACE", ip_str, 1);
-                        ESP_LOGI(TAG, "[BACNET] Interface configurée: %s", ip_str);
+                        ESP_LOGI(TAG, "[BACNET] Interface set: %s", ip_str);
                     }
-                    
+
                     dlenv_init();
                     atexit(datalink_cleanup);
                     Send_I_Am(&Handler_Transmit_Buffer[0]);
                     xTaskCreate(server_task, "bacnet_server", 8000, NULL, 1, NULL);
                     xTaskCreate(ping_task,   "ping_task",     4096, NULL, 1, NULL);
                     g_bacnet_started = true;
-                    ESP_LOGI(TAG, "[RECONNECT] BACnet + Ping lances (premiere connexion)");
+                    ESP_LOGI(TAG, "[RECONNECT] BACnet + Ping started (first connection)");
                 } else {
                     Send_I_Am(&Handler_Transmit_Buffer[0]);
                 }
 
                 solar_invalidate_cache();
                 rfm_log_event(EVENT_NTP_SYNC, 0.0f, 0);
-                ESP_LOGI(TAG, "[RECONNECT] ✅ Connexion etablie depuis hors-ligne !");
-                break;  /* sortir de la boucle hors-ligne → tomber dans la boucle surveillance */
+                ESP_LOGI(TAG, "[RECONNECT] Connection established from offline state");
+                break;  /* exit offline loop and continue monitoring */
             } else {
-                ESP_LOGW(TAG, "[RECONNECT] Echec — prochaine tentative dans 2 min");
+                ESP_LOGW(TAG, "[RECONNECT] Failed - next attempt in 2 minutes");
             }
         }
     }
 
-    /* ── Cas 1 (ou suite du Cas 2 après reconnexion) : surveillance ── */
-    ESP_LOGI(TAG, "[RECONNECT] Surveillance connexion active");
+    /* Monitoring loop */
+    ESP_LOGI(TAG, "[RECONNECT] Monitoring active connection");
 
     for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(1800000));  /* check toutes les 30 min */
+        vTaskDelay(pdMS_TO_TICKS(1800000));  /* check every 30 min */
 
-        if (!g_link_lost) continue;       
+        if (!g_link_lost) continue;
 
-        /* Connexion perdue — attendre 2 minutes avant de retenter */
-        ESP_LOGW(TAG, "[RECONNECT] Connexion perdue — attente 2 min avant retentative...");
+        /* Lost connection - wait 2 minutes before retry */
+        ESP_LOGW(TAG, "[RECONNECT] Connection lost - waiting 2 minutes before retry...");
         vTaskDelay(pdMS_TO_TICKS(1800000));  /* 30 minutes */
 
-        if (!g_link_lost) continue;         /* reconnecté entre-temps ? */
+        if (!g_link_lost) continue;
 
-        ESP_LOGI(TAG, "[RECONNECT] Tentative de reconnexion...");
+        ESP_LOGI(TAG, "[RECONNECT] Attempting reconnection...");
 
-        /* Stopper le ping pendant la reconnexion */
+        /* Stop ping during reconnection */
         if (g_ping_handle) {
             esp_ping_stop(g_ping_handle);
         }
@@ -271,52 +263,51 @@ void modem_reconnect_task(void *pvParameters)
         bool ok = modem_try_once();
 
         if (ok) {
-            ESP_LOGI(TAG, "[RECONNECT] ✅ Reconnexion réussie !");
+            ESP_LOGI(TAG, "[RECONNECT] Reconnection successful");
             g_connected     = true;
             g_link_lost     = false;
             g_ping_fail_count = 0;
 
-            /* Re-synchroniser NTP */
+            /* Resync NTP */
             ntp_initialize();
             rfm_time_init(true);
 
-            /* Re-annoncer le device BACnet sur le réseau */
+            /* Re-announce BACnet device on network */
             if (g_bacnet_started) {
                 Send_I_Am(&Handler_Transmit_Buffer[0]);
-                ESP_LOGI(TAG, "[RECONNECT] BACnet I_Am envoyé");
+                ESP_LOGI(TAG, "[RECONNECT] BACnet I_Am sent");
             } else {
-                /* === Configure BACnet for PPP interface === */
+                /* Configure BACnet for PPP interface */
                 esp_netif_ip_info_t ip_info;
                 if (g_ppp_netif && esp_netif_get_ip_info(g_ppp_netif, &ip_info) == ESP_OK 
                     && ip_info.ip.addr != 0) {
                     char ip_str[32];
                     esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
                     setenv("BACNET_IFACE", ip_str, 1);
-                    ESP_LOGI(TAG, "[BACNET] Interface configurée: %s", ip_str);
+                    ESP_LOGI(TAG, "[BACNET] Interface set: %s", ip_str);
                 }
-                
-                /* BACnet n'avait jamais démarré (hors-ligne au boot) → le lancer */
+
                 dlenv_init();
                 atexit(datalink_cleanup);
                 Send_I_Am(&Handler_Transmit_Buffer[0]);
                 xTaskCreate(server_task, "bacnet_server", 8000, NULL, 1, NULL);
                 g_bacnet_started = true;
-                ESP_LOGI(TAG, "[RECONNECT] BACnet démarré (première connexion)");
+                ESP_LOGI(TAG, "[RECONNECT] BACnet started (first connection)");
             }
 
-            /* Relancer le ping */
+            /* Restart ping */
             if (g_ping_handle) 
             {
                 esp_ping_start(g_ping_handle);
             }
 
-            /* Recalculer les heures solaires avec la nouvelle heure NTP */
+            /* Recalculate solar times after NTP update */
             solar_invalidate_cache();
             rfm_log_event(EVENT_NTP_SYNC, 0.0f, 0);
 
         } else {
-            ESP_LOGW(TAG, "[RECONNECT] ❌ Echec — nouvelle tentative dans 30 min");
-            /* g_link_lost reste true → la boucle retentera dans 30 min */
+            ESP_LOGW(TAG, "[RECONNECT] Failed - will retry in 30 minutes");
+            /* g_link_lost remains true -> loop will retry in 30 min */
         }
     }
 }

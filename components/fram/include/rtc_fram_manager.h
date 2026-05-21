@@ -1,31 +1,9 @@
-/*
- * rtc_fram_manager.h
- *
- * Module de gestion de la persistance BACnet via FRAM + RTC PCF8563.
- *
- * Fonctions principales :
- *  - rfm_init()              : init I2C, vérifie la magic, formate si vierge
- *  - rfm_save_av_state()     : sauvegarde AV0/AV1
- *  - rfm_load_av_state()     : restaure AV0/AV1
- *  - rfm_save_bv_state()     : sauvegarde mode AUTO/MANUEL
- *  - rfm_load_bv_state()     : restaure mode AUTO/MANUEL
- *  - rfm_sync_rtc_from_ntp() : écrit l'heure NTP dans le RTC + FRAM
- *  - rfm_time_init()         : boot : NTP si 4G dispo, sinon RTC
- *  - rfm_log_event()         : ajoute un événement dans le ring buffer
- *  - rfm_dump()              : affiche tout le contenu FRAM dans les logs
- */
-
 #ifndef RTC_FRAM_MANAGER_H
 #define RTC_FRAM_MANAGER_H
 
+#include <stdbool.h>
 #include "esp_err.h"
 #include "fram_layout.h"
-
-#include <stdbool.h>
-
-/* ─────────────────────────────────────────────────────────────
- * Initialisation
- * ─────────────────────────────────────────────────────────────*/
 
 /**
  * @brief Initialise le bus I2C, le RTC et la FRAM.

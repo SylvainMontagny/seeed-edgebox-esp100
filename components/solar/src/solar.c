@@ -12,15 +12,18 @@ static const char *TAG = "solar";
 #define R2D(x)     ((x)*180.0/PI)
 
 static solar_config_t s_cfg = {
-    .latitude=45.78f, .longitude=5.93f,   /* Entrelacs 73410 */
-    .offset_before_sunset=0, .offset_after_sunrise=0,
-    .enabled=1, .valid=0xAA, ._pad={0}
+    .latitude = 45.78f,
+    .longitude = 5.93f,
+    .offset_before_sunset = 0,
+    .offset_after_sunrise = 0,
+    .enabled = 1,
+    .valid = 0xAA,
+    ._pad = {0}
 };
 static solar_times_t s_today = {0};
 static int s_cache_day = -1;
 
-/* Retourne heure décimale UTC du lever (is_rise=true) ou coucher */
-static double solar_event_utc(int yr,int mo,int dy,double lat,double lon,bool is_rise)
+static double solar_event_utc(int yr, int mo, int dy, double lat, double lon, bool is_rise)
 {
     int a  = (14-mo)/12, y=yr+4800-a, m2=mo+12*a-3;
     double jdn = dy+(153*m2+2)/5+365*y+y/4-y/100+y/400-32045.0;
@@ -51,9 +54,9 @@ static double solar_event_utc(int yr,int mo,int dy,double lat,double lon,bool is
     return ev/60.0;
 }
 
-static int tz_offset(int yr,int mo,int dy)
+static int tz_offset(int yr, int mo, int dy)
 {
-    struct tm t={.tm_year=yr-1900,.tm_mon=mo-1,.tm_mday=dy,.tm_hour=12,.tm_isdst=-1};
+    struct tm t = {.tm_year = yr - 1900, .tm_mon = mo - 1, .tm_mday = dy, .tm_hour = 12, .tm_isdst = -1};
     time_t lt=mktime(&t); if(lt<0)return 1;
     struct tm *g=gmtime(&lt);
     int off=t.tm_hour-g->tm_hour;
@@ -69,7 +72,7 @@ solar_times_t solar_calc(int yr,int mo,int dy)
     double lat=s_cfg.latitude, lon=s_cfg.longitude;
     double rise_u=solar_event_utc(yr,mo,dy,lat,lon,true);
     double set_u =solar_event_utc(yr,mo,dy,lat,lon,false);
-    if(rise_u<0||set_u<0){ESP_LOGW(TAG,"Soleil polaire");return r;}
+    if(rise_u<0||set_u<0){ESP_LOGW(TAG,"Polar day/night - sun never rises or sets");return r;}
     int tz=tz_offset(yr,mo,dy);
     double rise_l=rise_u+tz+(double)s_cfg.offset_after_sunrise/60.0;
     double set_l =set_u +tz-(double)s_cfg.offset_before_sunset/60.0;
@@ -80,7 +83,7 @@ solar_times_t solar_calc(int yr,int mo,int dy)
     r.sunset_h =(uint8_t)(int)set_l;
     r.sunset_m =(uint8_t)((set_l -(int)set_l )*60.0);
     r.valid=true;
-    ESP_LOGI(TAG,"Solaire %04d-%02d-%02d : lever %02d:%02d / coucher %02d:%02d",
+    ESP_LOGI(TAG,"%04d-%02d-%02d : Sunrise %02d:%02d / Sunset %02d:%02d",
              yr,mo,dy,r.sunrise_h,r.sunrise_m,r.sunset_h,r.sunset_m);
     return r;
 }
@@ -120,7 +123,7 @@ esp_err_t solar_save_config(const solar_config_t *cfg)
     s_cfg=*cfg; s_cfg.valid=0xAA;
     solar_invalidate_cache();
     esp_err_t r=fram_write(FRAM_SOLAR_CONFIG_ADDR,(uint8_t*)&s_cfg,sizeof(s_cfg));
-    if(r==ESP_OK)ESP_LOGI(TAG,"Sauvegardé lat=%.4f lon=%.4f",s_cfg.latitude,s_cfg.longitude);
+    if(r==ESP_OK)ESP_LOGI(TAG,"Saved lat=%.4f lon=%.4f",s_cfg.latitude,s_cfg.longitude);
     return r;
 }
 
@@ -132,24 +135,22 @@ esp_err_t solar_init(void)
     esp_err_t r=fram_read(FRAM_SOLAR_CONFIG_ADDR,(uint8_t*)&cfg,sizeof(cfg));
     if(r==ESP_OK&&cfg.valid==0xAA){
         s_cfg=cfg;
-        ESP_LOGI(TAG,"Restauré lat=%.4f lon=%.4f enabled=%d",s_cfg.latitude,s_cfg.longitude,s_cfg.enabled);
+        ESP_LOGI(TAG,"Restored lat=%.4f lon=%.4f enabled=%d",s_cfg.latitude,s_cfg.longitude,s_cfg.enabled);
     } else {
-        ESP_LOGW(TAG,"Pas de config FRAM — défaut Paris (48.85, 2.35)");
+        ESP_LOGW(TAG,"No FRAM config found - using default Paris (48.85, 2.35)");
     }
     return ESP_OK;
 }
 
 void solar_get_offsets(int16_t *offset_before_sunset, int16_t *offset_after_sunrise)
 {
-    if (!offset_before_sunset || !offset_after_sunrise) return;
-    
+    if (!offset_before_sunset || !offset_after_sunrise) {
+        return;
+    }
 
     *offset_before_sunset = s_cfg.offset_before_sunset;
     *offset_after_sunrise = s_cfg.offset_after_sunrise;
-    
-    
 }
-
 
 void solar_set_offsets(int16_t offset_before_sunset, int16_t offset_after_sunrise)
 {
@@ -160,7 +161,7 @@ void solar_set_offsets(int16_t offset_before_sunset, int16_t offset_after_sunris
     
         fram_write(FRAM_SOLAR_CONFIG_ADDR, (uint8_t*)&s_cfg, sizeof(s_cfg));
         solar_invalidate_cache();
-        ESP_LOGI(TAG, "Offsets mis à jour: before_sunset=%d, after_sunrise=%d",
+        ESP_LOGI(TAG, "Offsets updated: before_sunset=%d, after_sunrise=%d",
                  offset_before_sunset, offset_after_sunrise);
     }
 }

@@ -46,66 +46,31 @@
 #include "modem.h"
 #include "ntp.h"
 #include "gpiooutputs.h"
-#include "bacdef.h"
 
 #define OBJECT_TABLE_BYTE_SIZE 4194304
 
 
 static const char *TAG = "server";
 
-/** Buffer used for receiving */
-static uint8_t rx_buffer[MAX_MPDU] = { 0 };
-
-  object_functions_t added_object;
- 
-
-
-
-
-
+/* Buffer used for receiving */
+static uint8_t rx_buffer[MAX_MPDU];
+object_functions_t added_object;
 void server_task(void *arg)
 {
-	// Structure pour stocker l'adresse de celui qui nous envoie un message
-    BACNET_ADDRESS src = {
-        0
-    }; 
-    
-    // Variable pour stocker la taille du message reçu
+    /* Source address of incoming packet */
+    BACNET_ADDRESS src = { 0 };
+
+    /* Received PDU length */
     uint16_t pdu_len = 0;
 	
     for (;;) {
-		// On attend de recevoir des données sur le réseau
-        pdu_len = datalink_receive(&src, &rx_buffer[0], MAX_MPDU, 5000);
-
-		// Si on a reçu quelque chose (taille > 0)
+        pdu_len = datalink_receive(&src, rx_buffer, MAX_MPDU, 5000);
         if (pdu_len) {
-			// On envoie le message au gestionnaire BACnet (Handler)
-            npdu_handler(&src, &rx_buffer[0], pdu_len);
-				//printf("Paquet recu ! Analog Value (0) = %f\n", Analog_Value_Present_Value(0));
-
-           // if (Analog_Value_Present_Value(0) == 1)
-            //{
-           //     led_on();
-            //}
-            //else
-           // {
-           //     led_off();
-           // }
+            npdu_handler(&src, rx_buffer, pdu_len);
         }
     }
 }
 
-
-/* ================================================================
- * Modification 1 : Remplir le Weekly Schedule avec les heures solaires
- *
- * Pour chaque jour (lundi=0 … dimanche=6) on programme :
- *   TV[0] = heure coucher soleil → 100.0 % (allumage)
- *   TV[1] = heure lever  soleil → 0.0 %   (extinction)
- *
- * Visible dans YABE → Schedule → Weekly Schedule
- * Mis à jour chaque matin à minuit (invalider cache → recalcul)
- * ================================================================ */
 void Init_Service_Handlers(void)
 {
 
@@ -114,18 +79,18 @@ void Init_Service_Handlers(void)
 
   
     object_functions_t *Object_Table = (object_functions_t *)heap_caps_malloc(
-    OBJECT_TABLE_BYTE_SIZE, 
-    MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM
-);
+        OBJECT_TABLE_BYTE_SIZE,
+        MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM
+    );
 
-    create_bacnet_object(OBJECT_DEVICE,&Object_Table[0], 0);
-    create_bacnet_object(OBJECT_BINARY_VALUE,&Object_Table[0], 1);
-    create_bacnet_object(OBJECT_SCHEDULE,&Object_Table[0], 2);
-    create_bacnet_object(OBJECT_CALENDAR,&Object_Table[0], 3);
-    create_bacnet_object(OBJECT_TRENDLOG,&Object_Table[0], 4);
-    create_bacnet_object(OBJECT_ANALOG_VALUE,&Object_Table[0], 5);
+    create_bacnet_object(OBJECT_DEVICE, &Object_Table[0], 0);
+    create_bacnet_object(OBJECT_BINARY_VALUE, &Object_Table[0], 1);
+    create_bacnet_object(OBJECT_SCHEDULE, &Object_Table[0], 2);
+    create_bacnet_object(OBJECT_CALENDAR, &Object_Table[0], 3);
+    create_bacnet_object(OBJECT_TRENDLOG, &Object_Table[0], 4);
+    create_bacnet_object(OBJECT_ANALOG_VALUE, &Object_Table[0], 5);
 
-    Device_Init(&Object_Table[0]);  
+    Device_Init(&Object_Table[0]);
 
     heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     ESP_LOGI(TAG, "Free heap after creating object table: %d bytes", heap_caps_get_free_size(MALLOC_CAP_8BIT));
@@ -161,7 +126,6 @@ void Init_Service_Handlers(void)
  */
 void create_bacnet_object(BACNET_OBJECT_TYPE object_type, object_functions_t *object_table, uint16_t IndexNum)
 {
-    /* Variable pour stocker les fonctions de l'objet à ajouter */
     switch (object_type)
     {      
         case OBJECT_DEVICE:
@@ -211,10 +175,5 @@ void create_bacnet_object(BACNET_OBJECT_TYPE object_type, object_functions_t *ob
             ESP_LOGW(TAG, "Unknown BACnet object type: %d", object_type);
             break;
     }
-
-    
-    
-        object_table[IndexNum] = added_object; /*ajoute l'objet à la table*/
-      
-   
+        object_table[IndexNum] = added_object; 
 }

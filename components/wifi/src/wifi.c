@@ -4,7 +4,6 @@
 #include "esp_wifi.h"
 #include "esp_system.h"
 #include "esp_event.h"
-#include "esp_event.h"
 #include "nvs_flash.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
@@ -77,16 +76,13 @@ bool wifi_initialize(void)
 
     ESP_LOGI(TAG, "wifi_init_sta finished. Connecting to SSID: %s", CONFIG_WIFI_SSID);
 
-    /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
-     * number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above) */
+    /* Wait for either success or failure from the WiFi event handler */
     EventBits_t bits = xEventGroupWaitBits(wifi_event_group,
             WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
             pdFALSE,
             pdFALSE,
             portMAX_DELAY);
 
-    /* xEventGroupWaitBits() returns the bits before the call returned, hence we can test which event actually
-     * happened. */
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "connected to ap SSID:%s", CONFIG_WIFI_SSID);
         return true;

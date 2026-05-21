@@ -1,15 +1,3 @@
-/*
- * rtc_fram_manager.c
- *
- * Module de gestion de la persistance BACnet via FRAM FM24CL64B + RTC PCF8563.
- *
- * Dépendances :
- *   - rtc_pcf8563.h / rtc_pcf8563.c
- *   - fram_fm24cl64b.h / fram_fm24cl64b.c
- *   - fram_layout.h
- *   - esp_sntp.h, esp_log.h, time.h (ESP-IDF)
- */
-
 #include "rtc_fram_manager.h"
 #include "rtc_pcf8563.h"
 #include "fram_fm24cl64b.h"
@@ -25,11 +13,6 @@
 
 static const char *TAG = "RFM";
 
-/* ══════════════════════════════════════════════════════════════
- * Helpers internes
- * ══════════════════════════════════════════════════════════════*/
-
-/** Lit l'heure courante du système et remplit une structure rtc */
 static void _get_local_time(fram_rtc_backup_t *out)
 {
     time_t now = time(NULL);
@@ -63,55 +46,49 @@ static void _apply_rtc_to_system(const fram_rtc_backup_t *rtc)
              rtc->hour, rtc->min, rtc->sec);
 }
 
-/* ══════════════════════════════════════════════════════════════
- * rfm_init
- * ══════════════════════════════════════════════════════════════*/
 esp_err_t rfm_init(void)
 {
-    /* Init I2C + RTC */
+    /* Initialize I2C and RTC */
     esp_err_t ret = pcf8563_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Échec init PCF8563 : %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "PCF8563 init failed: %s", esp_err_to_name(ret));
         return ret;
     }
     ESP_LOGI(TAG, "PCF8563 OK");
 
-    /* Vérification magic FRAM */
+    /* Verify FRAM magic value */
     uint32_t magic = 0;
     ret = fram_read(FRAM_MAGIC_ADDR, (uint8_t *)&magic, sizeof(magic));
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Échec lecture FRAM magic : %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed reading FRAM magic: %s", esp_err_to_name(ret));
         return ret;
     }
 
     if (magic != FRAM_MAGIC_VALUE) {
-        ESP_LOGW(TAG, "FRAM vierge (magic=0x%08lX) — formatage...", (unsigned long)magic);
+        ESP_LOGW(TAG, "Empty FRAM detected (magic=0x%08lX), formatting...", (unsigned long)magic);
 
-        /* Écriture de la magic */
+        /* Write FRAM magic */
         uint32_t m = FRAM_MAGIC_VALUE;
         ret = fram_write(FRAM_MAGIC_ADDR, (uint8_t *)&m, sizeof(m));
         if (ret != ESP_OK) return ret;
 
-        /* Remise à zéro des zones d'état */
+        /* Reset state regions */
         uint8_t zeros[16] = {0};
         fram_write(FRAM_AV_STATE_ADDR, zeros, sizeof(fram_av_state_t));
         fram_write(FRAM_RTC_BACKUP_ADDR, zeros, sizeof(fram_rtc_backup_t));
 
-        /* Head du ring buffer à 0 */
+        /* Reset ring buffer head */
         uint16_t head = 0;
         fram_write(FRAM_EVENT_HEAD_ADDR, (uint8_t *)&head, sizeof(head));
 
-        ESP_LOGI(TAG, "FRAM formatée — magic=0x%08lX", (unsigned long)FRAM_MAGIC_VALUE);
+        ESP_LOGI(TAG, "FRAM formatted — magic=0x%08lX", (unsigned long)FRAM_MAGIC_VALUE);
     } else {
-        ESP_LOGI(TAG, "FRAM OK — magic valide");
+        ESP_LOGI(TAG, "FRAM OK - magic valid");
     }
 
     return ESP_OK;
 }
 
-/* ══════════════════════════════════════════════════════════════
- * Persistance AV
- * ══════════════════════════════════════════════════════════════*/
 esp_err_t rfm_save_av_state(float av0, float av1)
 {
     fram_av_state_t s = {
@@ -134,7 +111,7 @@ esp_err_t rfm_load_av_state(float *av0, float *av1)
     if (ret != ESP_OK) return ret;
 
     if (s.valid != 0xAA) {
-        ESP_LOGW(TAG, "[AV LOAD] Données invalides — valeurs par défaut (0.0)");
+        ESP_LOGW(TAG, "[AV LOAD] Invalid data, restoring defaults");
         *av0 = 0.0f;
         *av1 = 0.0f;
         return ESP_ERR_NOT_FOUND;
@@ -147,27 +124,23 @@ esp_err_t rfm_load_av_state(float *av0, float *av1)
 }
 
 
-/* ══════════════════════════════════════════════════════════════
- * Gestion du temps
- * ══════════════════════════════════════════════════════════════*/
 void rfm_sync_rtc_from_ntp(void)
 {
-    /* Écriture dans le RTC matériel */
+    /* Write current time to hardware RTC */
     fram_rtc_backup_t t;
     _get_local_time(&t);
 
     esp_err_t ret = rtc_set_time(t.year, t.month, t.day, t.hour, t.min, t.sec);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "[NTP→RTC] Échec écriture RTC : %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "[NTP->RTC] Failed to write RTC: %s", esp_err_to_name(ret));
     } else {
-        ESP_LOGI(TAG, "[NTP→RTC] %02d/%02d/%02d %02d:%02d:%02d",
+        ESP_LOGI(TAG, "[NTP->RTC] %02d/%02d/%02d %02d:%02d:%02d",
                  t.day, t.month, t.year, t.hour, t.min, t.sec);
     }
 
-    /* Sauvegarde en FRAM */
     ret = fram_write(FRAM_RTC_BACKUP_ADDR, (uint8_t *)&t, sizeof(t));
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "[NTP→FRAM] Échec sauvegarde RTC : %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "[NTP→FRAM] Failed to save RTC backup: %s", esp_err_to_name(ret));
     }
 
     rfm_log_event(EVENT_NTP_SYNC, 0.0f, 0);
@@ -176,58 +149,46 @@ void rfm_sync_rtc_from_ntp(void)
 void rfm_time_init(bool ntp_available)
 {
     if (ntp_available) {
-        /*
-         * NTP disponible : la synchro NTP est déjà faite dans modem_initialize().
-         * On sauvegarde juste l'heure dans le RTC + FRAM.
-         */
-        ESP_LOGI(TAG, "[TIME INIT] Source : NTP (4G connectée)");
+        ESP_LOGI(TAG, "[TIME INIT] Source: NTP (4G connected)");
         rfm_sync_rtc_from_ntp();
         return;
     }
 
-    /*
-     * Pas de 4G : on essaie d'abord le RTC matériel, puis le backup FRAM.
-     */
-    ESP_LOGW(TAG, "[TIME INIT] 4G indisponible — tentative restauration heure locale...");
+    ESP_LOGW(TAG, "[TIME INIT] 4G unavailable — restoring local time from RTC or backup");
 
     uint8_t y, mo, d, h, mi, s;
     esp_err_t ret = rtc_get_time(&y, &mo, &d, &h, &mi, &s);
 
     if (ret == ESP_OK && y > 0) {
-        /* RTC matériel valide */
         fram_rtc_backup_t rtc = {
             .year = y, .month = mo, .day = d,
             .hour = h, .min   = mi, .sec = s,
             .valid = 0xAA
         };
         _apply_rtc_to_system(&rtc);
-        ESP_LOGI(TAG, "[TIME INIT] Source : RTC matériel (PCF8563)");
+        ESP_LOGI(TAG, "[TIME INIT] Source: hardware RTC (PCF8563)");
         rfm_log_event(EVENT_4G_LOST, 0.0f, 0);
         return;
     }
 
-    /* RTC matériel invalide : lecture backup FRAM */
-    ESP_LOGW(TAG, "[TIME INIT] RTC invalide — lecture backup FRAM...");
+    ESP_LOGW(TAG, "[TIME INIT] RTC invalid - reading backup FRAM...");
     fram_rtc_backup_t backup;
     ret = fram_read(FRAM_RTC_BACKUP_ADDR, (uint8_t *)&backup, sizeof(backup));
     if (ret == ESP_OK && backup.valid == 0xAA) {
         _apply_rtc_to_system(&backup);
-        ESP_LOGI(TAG, "[TIME INIT] Source : backup FRAM");
+        ESP_LOGI(TAG, "[TIME INIT] Source: backup FRAM");
         rfm_log_event(EVENT_4G_LOST, 0.0f, 0);
     } else {
-        ESP_LOGE(TAG, "[TIME INIT] Aucune source d'heure disponible — heure système non définie !");
+        ESP_LOGE(TAG, "[TIME INIT] No time source available - system time not set");
     }
 }
 
-/* ══════════════════════════════════════════════════════════════
- * Ring buffer événements
- * ══════════════════════════════════════════════════════════════*/
 void rfm_log_event(fram_event_type_t type, float value, uint8_t extra_u8)
 {
-    /* 1. Lecture du head courant */
+    /* Read current ring buffer head */
     uint16_t head = 0;
     if (fram_read(FRAM_EVENT_HEAD_ADDR, (uint8_t *)&head, sizeof(head)) != ESP_OK) {
-        ESP_LOGE(TAG, "[LOG] Échec lecture head");
+        ESP_LOGE(TAG, "[LOG] Failed to read ring head");
         return;
     }
     if (head >= FRAM_EVENT_MAX_ENTRIES) head = 0; /* protection débordement */
@@ -280,14 +241,14 @@ static const char *_event_name(uint8_t type)
         case EVENT_BOOT:        return "BOOT";
         case EVENT_NTP_SYNC:    return "NTP_SYNC";
         case EVENT_4G_LOST:     return "4G_LOST";
-        default:                return "INCONNU";
+        default:                return "UNKNOWN";
     }
 }
 
 void rfm_dump(void)
 {
     ESP_LOGI(TAG, "+------------------------------------------+");
-    ESP_LOGI(TAG, "|         DUMP FRAM FM24CL64B              |");
+    ESP_LOGI(TAG, "|         FRAM FM24CL64B DUMP              |");
     ESP_LOGI(TAG, "+------------------------------------------+");
 
     /* ── 1. Magic ── */
@@ -306,7 +267,7 @@ void rfm_dump(void)
         if (av.valid == 0xAA) {
             ESP_LOGI(TAG, "[AV]     AV0 = %.2f %%   AV1 = %.2f %%", av.av0, av.av1);
         } else {
-            ESP_LOGW(TAG, "[AV]     Zone vide (valid=0x%02X)", av.valid);
+            ESP_LOGW(TAG, "[AV]     Empty slot (valid=0x%02X)", av.valid);
         }
     } else {
         ESP_LOGE(TAG, "[AV]     Erreur lecture");
@@ -320,7 +281,7 @@ void rfm_dump(void)
                      rtc.year, rtc.month, rtc.day,
                      rtc.hour, rtc.min, rtc.sec);
         } else {
-            ESP_LOGW(TAG, "[RTC]    Zone vide (valid=0x%02X)", rtc.valid);
+            ESP_LOGW(TAG, "[RTC]    Empty slot (valid=0x%02X)", rtc.valid);
         }
     } else {
         ESP_LOGE(TAG, "[RTC]    Erreur lecture");
@@ -344,17 +305,17 @@ void rfm_dump(void)
         }
     }
 
-    ESP_LOGI(TAG, "[LOG]    Ring buffer : %u entrée(s) valide(s) / %u  (head=%u)",
+    ESP_LOGI(TAG, "[LOG]    Ring buffer : %u valid entry(ies) / %u  (head=%u)",
              count, FRAM_EVENT_MAX_ENTRIES, head);
 
     if (count == 0) {
-        ESP_LOGI(TAG, "[LOG]    (aucun événement enregistré)");
+        ESP_LOGI(TAG, "[LOG]    (no events logged)");
         ESP_LOGI(TAG, "+------------------------------------------+");
         return;
     }
 
     ESP_LOGI(TAG, "[LOG]    %-4s  %-10s  %-19s  %-7s  %s",
-             "#", "TYPE", "HORODATAGE", "VALEUR", "EXTRA");
+             "#", "TYPE", "TIMESTAMP", "VALUE", "EXTRA");
     ESP_LOGI(TAG, "[LOG]    %-4s  %-10s  %-19s  %-7s  %s",
              "----", "----------", "-------------------", "-------", "-----");
 
@@ -377,7 +338,7 @@ void rfm_dump(void)
         char extra_str[12] = "-";
         if (e.event_type == EVENT_MODE_CHANGE) {
             snprintf(extra_str, sizeof(extra_str), "%s",
-                     e.extra_u8 ? "MANUEL" : "AUTO");
+                     e.extra_u8 ? "MANUAL" : "AUTO");
         }
 
         ESP_LOGI(TAG, "[LOG]    %-4u  %-12s  20%02d-%02d-%02d %02d:%02d:%02d  %6.1f%%  %s",

@@ -64,7 +64,7 @@ menu "Configuration"
             Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used.
             
     config SERVER_DEVICE_ID
-        int "Bacnet device id"
+        int "Bacnet server device id"
         range 0 4194304
         default 200004 if IDF_TARGET_ESP32C3
         default 200003
@@ -72,7 +72,7 @@ menu "Configuration"
             Bacnet server device id
 
     config CLIENT_DEVICE_ID
-        int "Bacnet device id"
+        int "Bacnet client device id"
         range 0 4194304
         default 200003 if IDF_TARGET_ESP32C3
         default 200004
