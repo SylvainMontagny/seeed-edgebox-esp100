@@ -4,12 +4,81 @@
 #include "esp_log.h"
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
 #include <time.h>
 
 static const char *TAG = "solar";
 #define PI         3.14159265358979323846
 #define D2R(x)     ((x)*PI/180.0)
 #define R2D(x)     ((x)*180.0/PI)
+
+
+typedef struct {
+    float lon_min;
+    float lon_max;
+    float lat_min;
+    float lat_max;
+    const char *posix_tz;  
+} timezone_region_t;
+
+static const timezone_region_t timezone_table[] = {
+    /* Western Europe / GMT+0 regions */
+    {-10, 0, 30, 65, "WET0WEST,M3.5.0,M10.5.0/3"},       /* UK, Ireland, Portugal */
+    {0, 15, 35, 70, "CET-1CEST,M3.5.0,M10.5.0/3"},      /* Central Europe */
+    {15, 30, 35, 70, "EET-2EEST,M3.5.0,M10.5.0/3"},     /* Eastern Europe */
+    {30, 45, 35, 70, "EEST-3,M3.5.0,M10.5.0/3"},        /* Far Eastern Europe / West Asia */
+    
+    /* Middle East / Asia */
+    {45, 60, 20, 50, "IRST-3:30IRDT,J79/24,J263/24"},   /* Iran */
+    {60, 75, 20, 50, "GST-4:30"},                        /* Gulf */
+    {75, 90, 20, 50, "IST-5:30"},                        /* India */
+    
+    /* East Asia */
+    {90, 120, 15, 55, "CST-8"},                          /* China, Singapore, Malaysia */
+    {120, 135, 20, 55, "JST-9"},                         /* Japan, Korea */
+    
+    /* Americas */
+    {-120, -105, 15, 60, "PST8PDT,M3.2.0,M11.1.0"},      /* Pacific Time */
+    {-105, -90, 15, 60, "MST7MDT,M3.2.0,M11.1.0"},       /* Mountain Time */
+    {-90, -75, 15, 60, "CST6CDT,M3.2.0,M11.1.0"},        /* Central Time */
+    {-75, -60, 15, 60, "EST5EDT,M3.2.0,M11.1.0"},        /* Eastern Time */
+    
+    /* South America */
+    {-75, -60, -25, 5, "ART3"},                          /* Argentina */
+    {-75, -60, -35, -25, "BRST3BRDT,M10.3.0/0,M2.3.0/0"}, /* Brazil */
+    
+    /* Australia */
+    {110, 135, -45, -10, "AEDT-11"},                     /* Eastern Australia */
+    {125, 135, -35, -10, "ACDT-10:30"},                  /* Central Australia */
+    {115, 125, -35, -10, "AWST-8"},                      /* Western Australia */
+    
+    {-180, 180, -90, 90, "UTC0"}
+};
+
+static const int timezone_table_size = sizeof(timezone_table) / sizeof(timezone_region_t);
+
+const char* solar_get_timezone_posix(float latitude, float longitude)
+{
+    ESP_LOGD(TAG, "Looking up timezone for lat=%.2f lon=%.2f", latitude, longitude);
+    
+    /* Normalize longitude to [-180, 180) */
+    while (longitude >= 180.0f) longitude -= 360.0f;
+    while (longitude < -180.0f) longitude += 360.0f;
+    
+    /* Search for matching region */
+    for (int i = 0; i < timezone_table_size - 1; i++) {
+        const timezone_region_t *tz = &timezone_table[i];
+        if (longitude >= tz->lon_min && longitude < tz->lon_max &&
+            latitude >= tz->lat_min && latitude < tz->lat_max) {
+            ESP_LOGI(TAG, "Timezone for lat=%.2f lon=%.2f: %s", latitude, longitude, tz->posix_tz);
+            return tz->posix_tz;
+        }
+    }
+    
+    /* Fallback to UTC */
+    ESP_LOGW(TAG, "No timezone region found for lat=%.2f lon=%.2f, using UTC", latitude, longitude);
+    return "UTC0";
+}
 
 static solar_config_t s_cfg = {
     .latitude = 45.78f,
@@ -140,6 +209,19 @@ esp_err_t solar_init(void)
         ESP_LOGW(TAG,"No FRAM config found - using default Paris (48.85, 2.35)");
     }
     return ESP_OK;
+}
+
+void solar_update_timezone_env(void)
+{
+    const char *tz_string = solar_get_timezone_posix(s_cfg.latitude, s_cfg.longitude);
+    if (tz_string) {
+        ESP_LOGI(TAG, "Updating timezone to: %s (lat=%.2f lon=%.2f)",
+                 tz_string, s_cfg.latitude, s_cfg.longitude);
+        setenv("TZ", tz_string, 1);
+        tzset();
+    } else {
+        ESP_LOGW(TAG, "Failed to get timezone for update");
+    }
 }
 
 void solar_get_offsets(int16_t *offset_before_sunset, int16_t *offset_after_sunrise)

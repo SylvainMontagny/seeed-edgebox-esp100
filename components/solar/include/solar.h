@@ -36,6 +36,8 @@ solar_times_t    solar_get_today(void);
 void             solar_invalidate_cache(void);
 void             solar_get_offsets(int16_t *offset_before_sunset, int16_t *offset_after_sunrise);
 void             solar_set_offsets(int16_t offset_before_sunset, int16_t offset_after_sunrise);
+const char*      solar_get_timezone_posix(float latitude, float longitude);
+void             solar_update_timezone_env(void);
 
 #ifdef __cplusplus
 }

@@ -23,7 +23,24 @@ void ntp_sync_notification_cb(struct timeval *tv)
 void ntp_initialize(void)
 {
     ESP_LOGI(TAG, "[NTP] Demarrage...");
-    setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+    
+    /*get timezone */
+    const solar_config_t *solar_cfg = solar_get_config();
+    if (solar_cfg && solar_cfg->valid == 0xAA) {
+        const char *tz_string = solar_get_timezone_posix(solar_cfg->latitude, solar_cfg->longitude);
+        if (tz_string) {
+            ESP_LOGI(TAG, "[NTP] Setting timezone based on GPS: lat=%.2f lon=%.2f -> %s",
+                     solar_cfg->latitude, solar_cfg->longitude, tz_string);
+            setenv("TZ", tz_string, 1);
+        } else {
+            ESP_LOGW(TAG, "[NTP] Failed to get timezone, using default CET");
+            setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+        }
+    } else {
+        ESP_LOGW(TAG, "[NTP] No valid solar config, using default CET");
+        setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+    }
+    
     tzset();
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0,"pool.ntp.org");

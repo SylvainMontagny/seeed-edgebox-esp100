@@ -412,6 +412,7 @@ static esp_err_t handler_solar_post(httpd_req_t *req)
     cJSON_Delete(root);
 
     solar_save_config(&cfg);
+    solar_update_timezone_env();  /* Update system timezone*/
     
     /* update AV:2 and AV:3 with the offsets */
     Analog_Value_Present_Value_Set(2, offset_before_sunset, 16);
