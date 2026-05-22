@@ -52,6 +52,8 @@
 
 static const char *TAG = "server";
 
+void Setup_Default_Weekly_Schedule(void);
+
 /* Buffer used for receiving */
 static uint8_t rx_buffer[MAX_MPDU];
 object_functions_t added_object;
@@ -84,11 +86,9 @@ void Init_Service_Handlers(void)
     );
 
     create_bacnet_object(OBJECT_DEVICE, &Object_Table[0], 0);
-    create_bacnet_object(OBJECT_BINARY_VALUE, &Object_Table[0], 1);
-    create_bacnet_object(OBJECT_SCHEDULE, &Object_Table[0], 2);
-    create_bacnet_object(OBJECT_CALENDAR, &Object_Table[0], 3);
-    create_bacnet_object(OBJECT_TRENDLOG, &Object_Table[0], 4);
-    create_bacnet_object(OBJECT_ANALOG_VALUE, &Object_Table[0], 5);
+    create_bacnet_object(OBJECT_SCHEDULE, &Object_Table[0], 1);
+    create_bacnet_object(OBJECT_TRENDLOG, &Object_Table[0], 2);
+    create_bacnet_object(OBJECT_ANALOG_VALUE, &Object_Table[0], 3);
 
     Device_Init(&Object_Table[0]);
 
@@ -111,6 +111,9 @@ void Init_Service_Handlers(void)
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_TIME_SYNCHRONIZATION,     handler_timesync);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_COV_NOTIFICATION,         handler_ucov_notification);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_PRIVATE_TRANSFER,         handler_unconfirmed_private_transfer);
+
+    /* Populate a default weekly schedule on server start */
+    Setup_Default_Weekly_Schedule();
 }
 
 /**
@@ -141,14 +144,6 @@ void create_bacnet_object(BACNET_OBJECT_TYPE object_type, object_functions_t *ob
             Analog_Value_Write_Property, Analog_Value_Property_Lists,
             NULL,NULL, NULL, NULL, NULL, NULL };
             break;
-        case OBJECT_BINARY_VALUE:
-           added_object  =  (object_functions_t){OBJECT_BINARY_VALUE, Binary_Value_Init, Binary_Value_Count,
-            Binary_Value_Index_To_Instance, Binary_Value_Valid_Instance,
-            Binary_Value_Object_Name, Binary_Value_Read_Property,
-            Binary_Value_Write_Property, Binary_Value_Property_Lists,
-            NULL, NULL, NULL, NULL, NULL, NULL };
-         
-            break;
         case OBJECT_SCHEDULE:
              added_object  = (object_functions_t){OBJECT_SCHEDULE, Schedule_Init, Schedule_Count,
       Schedule_Index_To_Instance, Schedule_Valid_Instance,
@@ -156,13 +151,7 @@ void create_bacnet_object(BACNET_OBJECT_TYPE object_type, object_functions_t *ob
       (rpm_property_lists_function)Schedule_Property_Lists,
       NULL,NULL, NULL, NULL, NULL, NULL };
             break;
-        case OBJECT_CALENDAR:
-             added_object  =  (object_functions_t){OBJECT_CALENDAR, Calendar_Init, Calendar_Count,
-            Calendar_Index_To_Instance, Calendar_Valid_Instance,
-            Calendar_Object_Name, Calendar_Read_Property, Calendar_Write_Property,
-            (rpm_property_lists_function)Calendar_Property_Lists,
-            NULL, NULL, NULL, NULL, NULL, NULL };
-            break;
+
         case OBJECT_TRENDLOG:
              added_object  =  (object_functions_t){OBJECT_TRENDLOG, Trend_Log_Init, Trend_Log_Count,
       Trend_Log_Index_To_Instance, Trend_Log_Valid_Instance,
@@ -176,4 +165,62 @@ void create_bacnet_object(BACNET_OBJECT_TYPE object_type, object_functions_t *ob
             break;
     }
         object_table[IndexNum] = added_object; 
+}
+
+/*  Setup_Default_Weekly_Schedule
+ * Creates a weekly schedule for each schedule object with the
+ * following active periods (every day):
+ *  - 00:00 to 01:00
+ *  - 05:00 to 10:00
+ *  - 17:00 to 23:59 (continues into next day's 00:00-01:00) */
+void Setup_Default_Weekly_Schedule(void)
+{
+    unsigned sch_idx;
+    unsigned sch_count = Schedule_Count();
+
+    for (sch_idx = 0; sch_idx < sch_count; sch_idx++) {
+        SCHEDULE_DESCR *desc = Schedule_Object((uint32_t)sch_idx);
+        if (!desc) continue;
+
+        for (int day = 0; day < BACNET_WEEKLY_SCHEDULE_SIZE; day++) {
+            BACNET_DAILY_SCHEDULE *ds = &desc->Weekly_Schedule[day];
+            ds->TV_Count = 0;
+            int idx = 0;
+
+            /* 00:00 -> ON (100%) */
+            ds->Time_Values[idx].Time.hour = 0; ds->Time_Values[idx].Time.min = 0;
+            ds->Time_Values[idx].Time.sec = 0; ds->Time_Values[idx].Time.hundredths = 0;
+            ds->Time_Values[idx].Value.tag = BACNET_APPLICATION_TAG_REAL;
+            ds->Time_Values[idx].Value.type.Real = 100.0f; idx++;
+
+            /* 01:00 -> OFF (0%) */
+            ds->Time_Values[idx].Time.hour = 1; ds->Time_Values[idx].Time.min = 0;
+            ds->Time_Values[idx].Time.sec = 0; ds->Time_Values[idx].Time.hundredths = 0;
+            ds->Time_Values[idx].Value.tag = BACNET_APPLICATION_TAG_REAL;
+            ds->Time_Values[idx].Value.type.Real = 0.0f; idx++;
+
+            /* 05:00 -> ON (100%) */
+            ds->Time_Values[idx].Time.hour = 5; ds->Time_Values[idx].Time.min = 0;
+            ds->Time_Values[idx].Time.sec = 0; ds->Time_Values[idx].Time.hundredths = 0;
+            ds->Time_Values[idx].Value.tag = BACNET_APPLICATION_TAG_REAL;
+            ds->Time_Values[idx].Value.type.Real = 100.0f; idx++;
+
+            /* 10:00 -> OFF (0%) */
+            ds->Time_Values[idx].Time.hour = 10; ds->Time_Values[idx].Time.min = 0;
+            ds->Time_Values[idx].Time.sec = 0; ds->Time_Values[idx].Time.hundredths = 0;
+            ds->Time_Values[idx].Value.tag = BACNET_APPLICATION_TAG_REAL;
+            ds->Time_Values[idx].Value.type.Real = 0.0f; idx++;
+
+            /* 17:00 -> ON (100%) — remains ON until next day's 01:00 */
+            if (idx < (int)(sizeof(ds->Time_Values) / sizeof(ds->Time_Values[0]))) {
+                ds->Time_Values[idx].Time.hour = 17; ds->Time_Values[idx].Time.min = 0;
+                ds->Time_Values[idx].Time.sec = 0; ds->Time_Values[idx].Time.hundredths = 0;
+                ds->Time_Values[idx].Value.tag = BACNET_APPLICATION_TAG_REAL;
+                ds->Time_Values[idx].Value.type.Real = 100.0f; idx++;
+            }
+
+            ds->TV_Count = (uint16_t)idx;
+        }
+    }
+    ESP_LOGI(TAG, "Default weekly schedules set for %u schedule(s)", sch_count);
 }

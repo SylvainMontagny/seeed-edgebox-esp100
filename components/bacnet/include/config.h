@@ -100,6 +100,14 @@
 #endif
 #endif
 
+#ifndef BACNET_EXT_RAM_ATTR
+#if defined(__GNUC__)
+#define BACNET_EXT_RAM_ATTR __attribute__((section(".ext_ram.bss")))
+#else
+#define BACNET_EXT_RAM_ATTR
+#endif
+#endif
+
 /* for confirmed messages, this is the number of transactions */
 /* that we hold in a queue waiting for timeout. */
 /* Configure to zero if you don't want any confirmed messages */

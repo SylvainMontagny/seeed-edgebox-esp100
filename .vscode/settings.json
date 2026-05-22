@@ -1,9 +1,11 @@
 {
-    "idf.currentSetup": "${env:IDF_PATH}",
+    "idf.currentSetup": "C:\\esp\\v5.5.4\\esp-idf",
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"
     ],
     "idf.customExtraVars": {
+        "IDF_PATH": "C:\\esp\\v5.5.4\\esp-idf",
+        "PATH": "${env:PATH};C:\\Users\\admin\\.espressif\\tools\\xtensa-esp-elf\\esp-14.2.0_20260121\\bin;C:\\Users\\admin\\.espressif\\tools\\riscv32-esp-elf\\esp-15.2.0_20251204\\bin",
         "IDF_TARGET": "esp32s3"
     },
     "idf.portWin": "COM47",

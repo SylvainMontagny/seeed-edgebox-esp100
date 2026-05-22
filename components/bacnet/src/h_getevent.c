@@ -41,7 +41,7 @@
 
 /** @file h_getevent.c  Handles Get Event Information request. */
 
-static get_event_info_function Get_Event_Info[MAX_BACNET_OBJECT_TYPE];
+static get_event_info_function Get_Event_Info[MAX_BACNET_OBJECT_TYPE] BACNET_EXT_RAM_ATTR;
 
 void handler_get_event_information_set(
     BACNET_OBJECT_TYPE object_type,

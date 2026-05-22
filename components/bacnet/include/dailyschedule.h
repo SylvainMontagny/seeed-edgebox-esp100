@@ -5,7 +5,7 @@
 #include "bactimevalue.h"
 
 typedef struct BACnet_Daily_Schedule {
-    BACNET_TIME_VALUE Time_Values[4]; // Max 8 changements par jour
+    BACNET_TIME_VALUE Time_Values[8];
     uint16_t TV_Count;
 } BACNET_DAILY_SCHEDULE;
 

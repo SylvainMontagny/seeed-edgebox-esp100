@@ -74,11 +74,11 @@ typedef struct BACnet_COV_Subscription {
 #ifndef MAX_COV_SUBCRIPTIONS
 #define MAX_COV_SUBCRIPTIONS 128
 #endif
-static BACNET_COV_SUBSCRIPTION COV_Subscriptions[MAX_COV_SUBCRIPTIONS];
+static BACNET_COV_SUBSCRIPTION COV_Subscriptions[MAX_COV_SUBCRIPTIONS] BACNET_EXT_RAM_ATTR;
 #ifndef MAX_COV_ADDRESSES
 #define MAX_COV_ADDRESSES 16
 #endif
-static BACNET_COV_ADDRESS COV_Addresses[MAX_COV_ADDRESSES];
+static BACNET_COV_ADDRESS COV_Addresses[MAX_COV_ADDRESSES] BACNET_EXT_RAM_ATTR;
 
 /**
 * Gets the address from the list of COV addresses

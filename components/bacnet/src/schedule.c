@@ -28,7 +28,7 @@ typedef uint8_t BACNET_ARRAY_INDEX;
 #define min(a,b) (((a)<(b))?(a):(b))
 #endif
 
-static SCHEDULE_DESCR Schedule_Descr[MAX_SCHEDULES];
+static SCHEDULE_DESCR Schedule_Descr[MAX_SCHEDULES] BACNET_EXT_RAM_ATTR;
 
 static const int Schedule_Properties_Required[] = {
     PROP_OBJECT_IDENTIFIER,

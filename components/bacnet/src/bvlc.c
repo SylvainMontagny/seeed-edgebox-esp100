@@ -77,7 +77,7 @@ BACNET_BVLC_FUNCTION BVLC_Function_Code = BVLC_RESULT;  /* A safe default */
 #ifndef MAX_BBMD_ENTRIES
 #define MAX_BBMD_ENTRIES 128
 #endif
-static BBMD_TABLE_ENTRY BBMD_Table[MAX_BBMD_ENTRIES];
+static BBMD_TABLE_ENTRY BBMD_Table[MAX_BBMD_ENTRIES] BACNET_EXT_RAM_ATTR;
 
 /*Each device that registers as a foreign device shall be placed
 in an entry in the BBMD's Foreign Device Table (FDT). Each
@@ -103,7 +103,7 @@ typedef struct {
 #ifndef MAX_FD_ENTRIES
 #define MAX_FD_ENTRIES 128
 #endif
-static FD_TABLE_ENTRY FD_Table[MAX_FD_ENTRIES];
+static FD_TABLE_ENTRY FD_Table[MAX_FD_ENTRIES] BACNET_EXT_RAM_ATTR;
 
 
 /** A timer function that is called about once a second.

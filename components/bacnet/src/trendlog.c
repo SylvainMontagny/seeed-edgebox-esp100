@@ -34,8 +34,8 @@
  * Stockage statique — 2 logs × 100 entrées
  * Calcul RAM : 2 × 100 × sizeof(TL_DATA_REC) ≈ 2 × 100 × 16 = 3.2 KB
  * --------------------------------------------------------------- */
-static TL_DATA_REC  Logs[MAX_TREND_LOGS][TL_MAX_ENTRIES];
-static TL_LOG_INFO  LogInfo[MAX_TREND_LOGS];
+static TL_DATA_REC  Logs[MAX_TREND_LOGS][TL_MAX_ENTRIES] BACNET_EXT_RAM_ATTR;
+static TL_LOG_INFO  LogInfo[MAX_TREND_LOGS] BACNET_EXT_RAM_ATTR;
 
 /* ---------------------------------------------------------------
  * Listes de propriétés (ReadPropertyMultiple)
