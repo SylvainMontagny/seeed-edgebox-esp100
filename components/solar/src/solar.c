@@ -206,8 +206,48 @@ esp_err_t solar_init(void)
         s_cfg=cfg;
         ESP_LOGI(TAG,"Restored lat=%.4f lon=%.4f enabled=%d",s_cfg.latitude,s_cfg.longitude,s_cfg.enabled);
     } else {
-        ESP_LOGW(TAG,"No FRAM config found - using default Paris (48.85, 2.35)");
+#ifdef CONFIG_SOLAR_DEFAULT_LATITUDE
+    s_cfg.latitude = (float)atof(CONFIG_SOLAR_DEFAULT_LATITUDE);
+#else
+    s_cfg.latitude = 48.85f;
+#endif
+#ifdef CONFIG_SOLAR_DEFAULT_LONGITUDE
+    s_cfg.longitude = (float)atof(CONFIG_SOLAR_DEFAULT_LONGITUDE);
+#else
+    s_cfg.longitude = 2.35f;
+#endif
+#ifdef CONFIG_SOLAR_DEFAULT_ENABLED
+    s_cfg.enabled = CONFIG_SOLAR_DEFAULT_ENABLED;
+#else
+    s_cfg.enabled = 1;
+#endif
+    s_cfg.offset_before_sunset = 0;
+    s_cfg.offset_after_sunrise = 0;
+    s_cfg.valid = 0xAA;
+    ESP_LOGI(TAG, "No FRAM config found - using defaults lat=%.4f lon=%.4f enabled=%d", s_cfg.latitude, s_cfg.longitude, s_cfg.enabled);
     }
+
+/* If configured, overwrite any FRAM values with menuconfig defaults on boot */
+#ifdef CONFIG_SOLAR_OVERRIDE_FRAM_ON_BOOT
+    {
+#ifdef CONFIG_SOLAR_DEFAULT_LATITUDE
+        s_cfg.latitude = (float)atof(CONFIG_SOLAR_DEFAULT_LATITUDE);
+#endif
+#ifdef CONFIG_SOLAR_DEFAULT_LONGITUDE
+        s_cfg.longitude = (float)atof(CONFIG_SOLAR_DEFAULT_LONGITUDE);
+#endif
+#ifdef CONFIG_SOLAR_DEFAULT_ENABLED
+        s_cfg.enabled = CONFIG_SOLAR_DEFAULT_ENABLED ? 1 : 0;
+#endif
+        /* Persist the overridden configuration to FRAM */
+        esp_err_t w = solar_save_config(&s_cfg);
+        if (w == ESP_OK) {
+            ESP_LOGI(TAG, "Overwrote FRAM solar config with menuconfig values");
+        } else {
+            ESP_LOGW(TAG, "Failed to write overridden solar config to FRAM (%d)", w);
+        }
+    }
+#endif
     return ESP_OK;
 }
 

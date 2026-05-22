@@ -187,31 +187,31 @@ void Setup_Default_Weekly_Schedule(void)
             ds->TV_Count = 0;
             int idx = 0;
 
-            /* 00:00 -> ON (100%) */
+            /* 00:00 -> ON  */
             ds->Time_Values[idx].Time.hour = 0; ds->Time_Values[idx].Time.min = 0;
             ds->Time_Values[idx].Time.sec = 0; ds->Time_Values[idx].Time.hundredths = 0;
             ds->Time_Values[idx].Value.tag = BACNET_APPLICATION_TAG_REAL;
             ds->Time_Values[idx].Value.type.Real = 100.0f; idx++;
 
-            /* 01:00 -> OFF (0%) */
+            /* 01:00 -> OFF  */
             ds->Time_Values[idx].Time.hour = 1; ds->Time_Values[idx].Time.min = 0;
             ds->Time_Values[idx].Time.sec = 0; ds->Time_Values[idx].Time.hundredths = 0;
             ds->Time_Values[idx].Value.tag = BACNET_APPLICATION_TAG_REAL;
             ds->Time_Values[idx].Value.type.Real = 0.0f; idx++;
 
-            /* 05:00 -> ON (100%) */
+            /* 05:00 -> ON  */
             ds->Time_Values[idx].Time.hour = 5; ds->Time_Values[idx].Time.min = 0;
             ds->Time_Values[idx].Time.sec = 0; ds->Time_Values[idx].Time.hundredths = 0;
             ds->Time_Values[idx].Value.tag = BACNET_APPLICATION_TAG_REAL;
             ds->Time_Values[idx].Value.type.Real = 100.0f; idx++;
 
-            /* 10:00 -> OFF (0%) */
+            /* 10:00 -> OFF  */
             ds->Time_Values[idx].Time.hour = 10; ds->Time_Values[idx].Time.min = 0;
             ds->Time_Values[idx].Time.sec = 0; ds->Time_Values[idx].Time.hundredths = 0;
             ds->Time_Values[idx].Value.tag = BACNET_APPLICATION_TAG_REAL;
             ds->Time_Values[idx].Value.type.Real = 0.0f; idx++;
 
-            /* 17:00 -> ON (100%) — remains ON until next day's 01:00 */
+            /* 17:00 -> ON */
             if (idx < (int)(sizeof(ds->Time_Values) / sizeof(ds->Time_Values[0]))) {
                 ds->Time_Values[idx].Time.hour = 17; ds->Time_Values[idx].Time.min = 0;
                 ds->Time_Values[idx].Time.sec = 0; ds->Time_Values[idx].Time.hundredths = 0;

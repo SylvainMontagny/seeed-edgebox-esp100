@@ -101,10 +101,6 @@ static void update_solar_offsets_from_av(void)
 
 static volatile float g_prev_pv0    = -1.0f;
 static volatile float g_prev_pv1    = -1.0f;
-static volatile bool  g_force_pv0   = false;
-static volatile bool  g_force_pv1   = false;
-static volatile float g_forced_val0 = 0.0f;
-static volatile float g_forced_val1 = 0.0f;
 
 static void schedule_task(void *pvParameters)
 {
@@ -195,35 +191,23 @@ static void schedule_task(void *pvParameters)
                 /* Zone A control */
                 {
                     float target0;
-                    if (g_force_pv0) {
-                        if (solar_transition || has_se0) {
-                            g_force_pv0 = false;
-                            ESP_LOGI(TAG, "[FORCE] Zone A: force cancelled");
-                        } else {
-                            target0 = g_forced_val0;
-                            goto apply_zone_a;
-                        }
+                    if (!is_night) {
+                        target0 = 0.0f;
+                    } else if (has_se0) {
+                        target0 = desc0->Present_Value.type.Real;
+                    } else {
+                        target0 = 100.0f;
                     }
-                    if (!is_night)       { target0 = 0.0f; }
-                    else if (has_se0)    
-                    { 
-                        target0 = desc0->Present_Value.type.Real; }
-                    else                 
-                    { 
-                        target0 = 100.0f; 
-                    }
-                    apply_zone_a:;
                     if (target0 != g_prev_pv0) {
                         Analog_Value_Present_Value_Set(0, target0, 16);
                         av_pwm_apply(0, target0);
-                    
-                        if (!is_night && !g_force_pv0) {
+                        if (!is_night) {
                             ESP_LOGI(TAG, "[SOLAR] Zone A -> 0%% (DAY)");
                             rfm_log_event(EVENT_SOLAR_OFF, 0.0f, 0);
-                        } else if (has_se0 && !g_force_pv0) {
+                        } else if (has_se0) {
                             ESP_LOGI(TAG, "[SE] Zone A -> %.1f%% (NIGHT)", target0);
                             rfm_log_event(EVENT_AV0_CHANGE, target0, 0);
-                        } else if (!g_force_pv0) {
+                        } else {
                             ESP_LOGI(TAG, "[SOLAR] Zone A -> 100%% (NIGHT)");
                             rfm_log_event(EVENT_SOLAR_ON, 100.0f, 0);
                         }
@@ -235,28 +219,13 @@ static void schedule_task(void *pvParameters)
                 /* Zone B control */
                 {
                     float target1;
-                    if (g_force_pv1) {
-                        if (solar_transition || has_se1) {
-                            g_force_pv1 = false;
-                            ESP_LOGI(TAG, "[FORCE] Zone B: force cancelled");
-                        } else {
-                            target1 = g_forced_val1;
-                            goto apply_zone_b;
-                        }
+                    if (!is_night) {
+                        target1 = 0.0f;
+                    } else if (has_se1) {
+                        target1 = desc1->Present_Value.type.Real;
+                    } else {
+                        target1 = 100.0f;
                     }
-                    if (!is_night)       
-                    { 
-                        target1 = 0.0f; 
-                    }
-                    else if (has_se1)    
-                    { 
-                        target1 = desc1->Present_Value.type.Real; 
-                    }
-                    else                
-                    { 
-                        target1 = 100.0f; 
-                    }
-                    apply_zone_b:;
                     if (target1 != g_prev_pv1) {
                         Analog_Value_Present_Value_Set(1, target1, 16);
                         av_pwm_apply(1, target1);

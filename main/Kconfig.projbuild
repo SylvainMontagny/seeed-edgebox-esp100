@@ -97,5 +97,30 @@ menu "Configuration"
         default 5
         help
             WiFi max retry
+    config SOLAR_DEFAULT_LATITUDE
+    string "Default solar latitude"
+    default "49"
+    help
+      Default latitude used when no FRAM config is present.
+
+config SOLAR_DEFAULT_LONGITUDE
+    string "Default solar longitude"
+    default "2"
+    help
+      Default longitude used when no FRAM config is present.
+
+config SOLAR_DEFAULT_ENABLED
+    bool "Enable solar feature by default when no FRAM config"
+    default y
+    help
+      If enabled, solar functions are active by default when no FRAM config is found.
+
+config SOLAR_OVERRIDE_FRAM_ON_BOOT
+    bool "Override FRAM solar coordinates with menuconfig on boot"
+    default n
+    help
+      When enabled, the values configured in menuconfig for solar latitude/longitude
+      will be written to FRAM during initialization, replacing any previously
+      persisted coordinates.
 
 endmenu
