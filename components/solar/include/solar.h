@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <time.h>
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -31,6 +32,12 @@ esp_err_t        solar_init(void);
 esp_err_t        solar_save_config(const solar_config_t *cfg);
 const solar_config_t *solar_get_config(void);
 solar_times_t    solar_calc(int year, int month, int day);
+solar_times_t    solar_calc_by_coords(int year, int month, int day,
+                                      float latitude, float longitude,
+                                      int16_t offset_before_sunset,
+                                      int16_t offset_after_sunrise);
+bool             solar_get_local_time(float latitude, float longitude,
+                                      struct tm *local_time);
 bool             solar_is_night_now(void);
 solar_times_t    solar_get_today(void);
 void             solar_invalidate_cache(void);

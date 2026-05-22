@@ -3,6 +3,7 @@
 #include "fram_fm24cl64b.h"
 #include "esp_log.h"
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
@@ -34,8 +35,9 @@ static const timezone_region_t timezone_table[] = {
     {75, 90, 20, 50, "IST-5:30"},                        /* India */
     
     /* East Asia */
-    {90, 120, 15, 55, "CST-8"},                          /* China, Singapore, Malaysia */
-    {120, 135, 20, 55, "JST-9"},                         /* Japan, Korea */
+    {90, 123, 15, 55, "CST-8"},                          /* China, Singapore, Malaysia */
+    {123, 150, 24, 55, "JST-9"},                         /* Japan, Korea */
+    {150, 180, -47, -10, "NZST-12NZDT-13,M9.1.0,M4.1.0/3"}, /* New Zealand */
     
     /* Americas */
     {-120, -105, 15, 60, "PST8PDT,M3.2.0,M11.1.0"},      /* Pacific Time */
@@ -48,14 +50,16 @@ static const timezone_region_t timezone_table[] = {
     {-75, -60, -35, -25, "BRST3BRDT,M10.3.0/0,M2.3.0/0"}, /* Brazil */
     
     /* Australia */
-    {110, 135, -45, -10, "AEDT-11"},                     /* Eastern Australia */
-    {125, 135, -35, -10, "ACDT-10:30"},                  /* Central Australia */
-    {115, 125, -35, -10, "AWST-8"},                      /* Western Australia */
+    {110, 125, -35, -10, "AWST-8"},                      /* Western Australia */
+    {125, 135, -35, -10, "ACST-9:30ACDT-10:30,M10.1.0,M4.1.0/3"}, /* Central Australia */
+    {135, 155, -45, -10, "AEST-10AEDT-11,M10.1.0,M4.1.0/3"}, /* Eastern Australia */
+    {150, 180, -47, -10, "NZST-12NZDT-13,M9.1.0,M4.1.0/3"}, /* New Zealand */
     
     {-180, 180, -90, 90, "UTC0"}
 };
 
 static const int timezone_table_size = sizeof(timezone_table) / sizeof(timezone_region_t);
+static char s_custom_tz[32] = {0};
 
 const char* solar_get_timezone_posix(float latitude, float longitude)
 {
@@ -74,15 +78,21 @@ const char* solar_get_timezone_posix(float latitude, float longitude)
             return tz->posix_tz;
         }
     }
-    
-    /* Fallback to UTC */
-    ESP_LOGW(TAG, "No timezone region found for lat=%.2f lon=%.2f, using UTC", latitude, longitude);
-    return "UTC0";
+
+    int offset = (int)floor((longitude + 7.5f) / 15.0f);
+    int posix = -offset;
+    if (posix == 0) {
+        strncpy(s_custom_tz, "UTC0", sizeof(s_custom_tz));
+    } else {
+        snprintf(s_custom_tz, sizeof(s_custom_tz), "UTC%+d", posix);
+    }
+    ESP_LOGW(TAG, "No region match for lat=%.2f lon=%.2f, using approximate timezone %s", latitude, longitude, s_custom_tz);
+    return s_custom_tz;
 }
 
 static solar_config_t s_cfg = {
-    .latitude = 45.78f,
-    .longitude = 5.93f,
+    .latitude = 49.0f,
+    .longitude = 2.0f,
     .offset_before_sunset = 0,
     .offset_after_sunrise = 0,
     .enabled = 1,
@@ -90,7 +100,11 @@ static solar_config_t s_cfg = {
     ._pad = {0}
 };
 static solar_times_t s_today = {0};
-static int s_cache_day = -1;
+static int s_cache_ymd = -1;
+static bool s_tz_cached = false;
+static float s_tz_cached_latitude = 0.0f;
+static float s_tz_cached_longitude = 0.0f;
+static char s_tz_cached_string[128] = {0};
 
 static double solar_event_utc(int yr, int mo, int dy, double lat, double lon, bool is_rise)
 {
@@ -123,67 +137,182 @@ static double solar_event_utc(int yr, int mo, int dy, double lat, double lon, bo
     return ev/60.0;
 }
 
-static int tz_offset(int yr, int mo, int dy)
+static bool solar_set_timezone_env(float latitude, float longitude,
+                                   char *old_tz, size_t old_tz_size)
 {
-    struct tm t = {.tm_year = yr - 1900, .tm_mon = mo - 1, .tm_mday = dy, .tm_hour = 12, .tm_isdst = -1};
-    time_t lt=mktime(&t); if(lt<0)return 1;
-    struct tm *g=gmtime(&lt);
-    int off=t.tm_hour-g->tm_hour;
-    if(off < -12) { off += 24; }
-    if(off > 12)  { off -= 24; }
-    return off;
+    const char *current_tz = getenv("TZ");
+    if (old_tz && old_tz_size > 0) {
+        if (current_tz) {
+            strncpy(old_tz, current_tz, old_tz_size - 1);
+            old_tz[old_tz_size - 1] = '\0';
+        } else {
+            old_tz[0] = '\0';
+        }
+    }
+
+    const char *tz_string = solar_get_timezone_posix(latitude, longitude);
+    if (!tz_string) return false;
+
+    setenv("TZ", tz_string, 1);
+    tzset();
+    return true;
 }
 
-solar_times_t solar_calc(int yr,int mo,int dy)
+static void solar_restore_timezone_env(const char *old_tz)
+{
+    if (old_tz && old_tz[0]) {
+        setenv("TZ", old_tz, 1);
+    } else {
+        unsetenv("TZ");
+    }
+    tzset();
+}
+
+static bool solar_activate_timezone(float latitude, float longitude)
+{
+    if (s_tz_cached && fabsf(latitude - s_tz_cached_latitude) < 1e-6f &&
+        fabsf(longitude - s_tz_cached_longitude) < 1e-6f) {
+        return true;
+    }
+
+    const char *tz_string = solar_get_timezone_posix(latitude, longitude);
+    if (!tz_string) {
+        return false;
+    }
+
+    setenv("TZ", tz_string, 1);
+    tzset();
+
+    s_tz_cached = true;
+    s_tz_cached_latitude = latitude;
+    s_tz_cached_longitude = longitude;
+    strncpy(s_tz_cached_string, tz_string, sizeof(s_tz_cached_string) - 1);
+    s_tz_cached_string[sizeof(s_tz_cached_string) - 1] = '\0';
+    return true;
+}
+
+static time_t solar_timegm(const struct tm *input_tm)
+{
+    struct tm tm_copy = *input_tm;
+    char old_tz[128];
+    const char *current_tz = getenv("TZ");
+    if (current_tz) {
+        strncpy(old_tz, current_tz, sizeof(old_tz) - 1);
+        old_tz[sizeof(old_tz) - 1] = '\0';
+    } else {
+        old_tz[0] = '\0';
+    }
+
+    setenv("TZ", "UTC0", 1);
+    tzset();
+    time_t result = mktime(&tm_copy);
+    solar_restore_timezone_env(old_tz);
+    return result;
+}
+
+static double tz_offset_for_coords(int yr, int mo, int dy,
+                                   double lat, double lon)
+{
+    char old_tz[128];
+    if (!solar_set_timezone_env(lat, lon, old_tz, sizeof(old_tz))) {
+        return 0.0;
+    }
+
+    struct tm local_tm = {.tm_year = yr - 1900, .tm_mon = mo - 1,
+                          .tm_mday = dy, .tm_hour = 12,
+                          .tm_min = 0, .tm_sec = 0, .tm_isdst = -1};
+    time_t local_epoch = mktime(&local_tm);
+    struct tm utc_tm = local_tm;
+    time_t utc_epoch   = solar_timegm(&utc_tm);
+    solar_restore_timezone_env(old_tz);
+
+    if (local_epoch == (time_t)-1 || utc_epoch == (time_t)-1) {
+        return 0.0;
+    }
+    return difftime(utc_epoch, local_epoch) / 3600.0;
+}
+
+solar_times_t solar_calc_by_coords(int yr, int mo, int dy,
+                                   float latitude, float longitude,
+                                   int16_t offset_before_sunset,
+                                   int16_t offset_after_sunrise)
 {
     solar_times_t r={0}; r.valid=false;
-    if(!s_cfg.enabled)return r;
-    double lat=s_cfg.latitude, lon=s_cfg.longitude;
-    double rise_u=solar_event_utc(yr,mo,dy,lat,lon,true);
-    double set_u =solar_event_utc(yr,mo,dy,lat,lon,false);
+    double rise_u=solar_event_utc(yr,mo,dy,latitude,longitude,true);
+    double set_u =solar_event_utc(yr,mo,dy,latitude,longitude,false);
     if(rise_u<0||set_u<0){ESP_LOGW(TAG,"Polar day/night - sun never rises or sets");return r;}
-    int tz=tz_offset(yr,mo,dy);
-    double rise_l=rise_u+tz+(double)s_cfg.offset_after_sunrise/60.0;
-    double set_l =set_u +tz-(double)s_cfg.offset_before_sunset/60.0;
+    double tz = tz_offset_for_coords(yr,mo,dy,latitude,longitude);
+    double rise_l=rise_u+tz+(double)offset_after_sunrise/60.0;
+    double set_l =set_u +tz-(double)offset_before_sunset/60.0;
     if(rise_l<0){rise_l+=24;} if(rise_l>=24){rise_l-=24;}
     if(set_l<0){set_l+=24;} if(set_l>=24){set_l-=24;}
     r.sunrise_h=(uint8_t)(int)rise_l;
     r.sunrise_m=(uint8_t)((rise_l-(int)rise_l)*60.0);
     r.sunset_h =(uint8_t)(int)set_l;
-    r.sunset_m =(uint8_t)((set_l -(int)set_l )*60.0);
+    r.sunset_m =(uint8_t)((set_l-(int)set_l)*60.0);
     r.valid=true;
     ESP_LOGI(TAG,"%04d-%02d-%02d : Sunrise %02d:%02d / Sunset %02d:%02d",
              yr,mo,dy,r.sunrise_h,r.sunrise_m,r.sunset_h,r.sunset_m);
     return r;
 }
 
+solar_times_t solar_calc(int yr,int mo,int dy)
+{
+    return solar_calc_by_coords(yr, mo, dy,
+                                s_cfg.latitude, s_cfg.longitude,
+                                s_cfg.offset_before_sunset,
+                                s_cfg.offset_after_sunrise);
+}
+
+bool solar_get_local_time(float latitude, float longitude, struct tm *out)
+{
+    if (!out) return false;
+    if (!solar_activate_timezone(latitude, longitude)) {
+        return false;
+    }
+
+    time_t now = time(NULL);
+    struct tm *local = localtime(&now);
+    if (!local) {
+        return false;
+    }
+    *out = *local;
+    return true;
+}
+
 solar_times_t solar_get_today(void)
 {
-    time_t now=time(NULL); struct tm *t=localtime(&now);
-    if(t->tm_mday != s_cache_day) {
-        s_today=solar_calc(t->tm_year+1900,t->tm_mon+1,t->tm_mday);
-        s_cache_day=t->tm_mday;
+    struct tm local;
+    if (!solar_get_local_time(s_cfg.latitude, s_cfg.longitude, &local)) {
+        return s_today;
+    }
+
+    int ymd = (local.tm_year + 1900) * 10000 + (local.tm_mon + 1) * 100 + local.tm_mday;
+    if (ymd != s_cache_ymd) {
+        s_today = solar_calc(local.tm_year + 1900, local.tm_mon + 1, local.tm_mday);
+        s_cache_ymd = ymd;
     }
     return s_today;
 }
 
-void solar_invalidate_cache(void){s_cache_day=-1;}
+void solar_invalidate_cache(void){s_cache_ymd=-1;}
 
 bool solar_is_night_now(void)
 {
+    if(!s_cfg.enabled) return false;
+    solar_times_t st = solar_get_today();
+    if(!st.valid) return false;
 
-    
-    if(!s_cfg.enabled)return false;
-    solar_times_t st=solar_get_today();
-    if(!st.valid)return false;
-    time_t now=time(NULL); struct tm *t=localtime(&now);
-    int cur=t->tm_hour*60+t->tm_min;
-    int ss =st.sunset_h *60+st.sunset_m;
-    int sr =st.sunrise_h*60+st.sunrise_m;
-    if(ss>sr) return(cur>=ss||cur<sr);
-    else      return(cur>=ss&&cur<sr);
-  
-   
+    struct tm local;
+    if (!solar_get_local_time(s_cfg.latitude, s_cfg.longitude, &local)) {
+        return false;
+    }
+
+    int cur = local.tm_hour * 60 + local.tm_min;
+    int ss = st.sunset_h * 60 + st.sunset_m;
+    int sr = st.sunrise_h * 60 + st.sunrise_m;
+    if (ss > sr) return (cur >= ss || cur < sr);
+    else         return (cur >= ss && cur < sr);
 }
 
 esp_err_t solar_save_config(const solar_config_t *cfg)
@@ -253,12 +382,9 @@ esp_err_t solar_init(void)
 
 void solar_update_timezone_env(void)
 {
-    const char *tz_string = solar_get_timezone_posix(s_cfg.latitude, s_cfg.longitude);
-    if (tz_string) {
+    if (solar_activate_timezone(s_cfg.latitude, s_cfg.longitude)) {
         ESP_LOGI(TAG, "Updating timezone to: %s (lat=%.2f lon=%.2f)",
-                 tz_string, s_cfg.latitude, s_cfg.longitude);
-        setenv("TZ", tz_string, 1);
-        tzset();
+                 s_tz_cached_string, s_cfg.latitude, s_cfg.longitude);
     } else {
         ESP_LOGW(TAG, "Failed to get timezone for update");
     }

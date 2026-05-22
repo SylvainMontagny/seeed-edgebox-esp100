@@ -547,6 +547,33 @@ void Schedule_Recalculate_PV(
         }
 #endif
 
+    /* 2. Weekly schedule evaluation for the current weekday */
+    if (wday >= 1 && wday <= BACNET_WEEKLY_SCHEDULE_SIZE) {
+        BACNET_DAILY_SCHEDULE *ds = &desc->Weekly_Schedule[wday - 1];
+        bool ws_found = false;
+        BACNET_TIME ws_best_t = {0, 0, 0, 0};
+        if (ds->TV_Count > 0) {
+            for (j = 0; j < (int)ds->TV_Count; j++) {
+                BACNET_TIME *wt = &ds->Time_Values[j].Time;
+
+                if (datetime_compare_time((BACNET_TIME *)btime, wt) < 0) continue;
+
+                if (!ws_found || datetime_compare_time(wt, &ws_best_t) > 0) {
+                    ws_best_t = *wt;
+                    desc->Present_Value = ds->Time_Values[j].Value;
+                    ws_found = true;
+                }
+            }
+
+            if (ws_found) {
+                if (desc->Present_Value.type.Real != old_value.type.Real) {
+                    ESP_LOGI("schedule", "WEEKLY → %.1f", desc->Present_Value.type.Real);
+                }
+                return;
+            }
+        }
+    }
+
     if (desc->Present_Value.type.Real != old_value.type.Real) {
         ESP_LOGI("schedule", "Default → %.1f", desc->Present_Value.type.Real);
     }
