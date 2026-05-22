@@ -131,11 +131,27 @@ bool Schedule_Valid_Instance(uint32_t object_instance)
 bool Schedule_Object_Name(uint32_t object_instance,
     BACNET_CHARACTER_STRING *object_name)
 {
-    char text[32];
+    const char *text = NULL;
     if (Schedule_Valid_Instance(object_instance)) {
-        snprintf(text, sizeof(text), "SCHEDULE %u",
+        switch (object_instance) {
+            case 0:
+                text = "Zone A schedule";
+                break;
+            case 1:
+                text = "Zone B schedule";
+                break;
+            default:
+                text = NULL;
+                break;
+        }
+        if (text) {
+            characterstring_init_ansi(object_name, text);
+            return true;
+        }
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "SCHEDULE %u",
             (unsigned)object_instance);
-        characterstring_init_ansi(object_name, text);
+        characterstring_init_ansi(object_name, buffer);
         return true;
     }
     return false;

@@ -167,11 +167,26 @@ bool Trend_Log_Object_Name(
     uint32_t object_instance,
     BACNET_CHARACTER_STRING *object_name)
 {
-    char text[32] = "";
+    const char *text = NULL;
     if (object_instance < MAX_TREND_LOGS) {
-        snprintf(text, sizeof(text), "Trend Log %lu",
+        switch (object_instance) {
+            case 0:
+                text = "Zone A output trendlog";
+                break;
+            case 1:
+                text = "Zone B output trendlog";
+                break;
+            default:
+                text = NULL;
+                break;
+        }
+        if (text) {
+            return characterstring_init_ansi(object_name, text);
+        }
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "Trend Log %lu",
                  (unsigned long)object_instance);
-        return characterstring_init_ansi(object_name, text);
+        return characterstring_init_ansi(object_name, buffer);
     }
     return false;
 }

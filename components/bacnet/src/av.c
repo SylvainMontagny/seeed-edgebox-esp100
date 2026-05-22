@@ -240,13 +240,35 @@ bool Analog_Value_Object_Name(
     uint32_t object_instance,
     BACNET_CHARACTER_STRING * object_name)
 {
-    static char text_string[32] = "";   /* okay for single thread */
+    const char *text_string = NULL;
     bool status = false;
 
     if (object_instance < MAX_ANALOG_VALUES) {
-        sprintf(text_string, "ANALOG VALUE %lu",
-            (unsigned long) object_instance);
-        status = characterstring_init_ansi(object_name, text_string);
+        switch (object_instance) {
+            case 0:
+                text_string = "Zone A output analog value ";
+                break;
+            case 1:
+                text_string = "Zone B output analog value ";
+                break;
+            case 2:
+                text_string = "Sunrise offset analog value";
+                break;
+            case 3:
+                text_string = "Sunset offset analog value";
+                break;
+            default:
+                text_string = NULL;
+                break;
+        }
+        if (text_string) {
+            status = characterstring_init_ansi(object_name, text_string);
+        } else {
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "ANALOG VALUE %lu",
+                (unsigned long) object_instance);
+            status = characterstring_init_ansi(object_name, buffer);
+        }
     }
 
     return status;

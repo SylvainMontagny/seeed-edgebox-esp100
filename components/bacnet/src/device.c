@@ -1743,7 +1743,7 @@ void Device_Init(
 {
     struct object_functions *pObject = NULL;
 
-    characterstring_init_ansi(&My_Object_Name, "FreeRTOS");
+    characterstring_init_ansi(&My_Object_Name, "Edgebox-ESP-100");
     if (object_table) {
         Object_Table = object_table;
     } else {
