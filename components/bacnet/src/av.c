@@ -44,7 +44,7 @@
 #include "handlers.h"
 #include "av.h"
 #include "bv.h"
-/* SUPPRIMÉ: driver/gpio.h — plus de GPIO digital, uniquement PWM via av_pwm_apply() */
+#include "trendlog.h"
 #include "driver/ledc.h"
 #include "esp_log.h"
 #include "rtc_fram_manager.h"
@@ -54,6 +54,8 @@ static const char *TAG = "AV";
 /* Déclaration externe — av_pwm_apply() est définie dans main.c
    AV0 → GPIO42 (AO0 EdgeBox), AV1 → GPIO41 (AO1 EdgeBox), AV2 → virtuel */
 extern void av_pwm_apply(uint32_t instance, float percent);
+
+
 
 #ifndef MAX_ANALOG_VALUES
 #define MAX_ANALOG_VALUES 4
@@ -210,11 +212,20 @@ bool Analog_Value_Present_Value_Set(
     float value,
     uint8_t priority)
 {
-    unsigned index = 0;
+    unsigned index = Analog_Value_Instance_To_Index(object_instance);
     bool status = false;
 
-    index = Analog_Value_Instance_To_Index(object_instance);
     if (index < MAX_ANALOG_VALUES) {
+        if (index < MAX_TREND_LOGS) {
+            float before = AV_Descr[index].Present_Value;
+            if (before != value) {
+                Trend_Log_Record(index);
+                AV_Descr[index].Present_Value = value;
+                Trend_Log_Record(index);
+                status = true;
+                return status;
+            }
+        }
         AV_Descr[index].Present_Value = value;
         status = true;
     }
@@ -234,6 +245,7 @@ float Analog_Value_Present_Value(
 
     return value;
 }
+
 
 /* note: the object name must be unique within this device */
 bool Analog_Value_Object_Name(
@@ -495,16 +507,12 @@ int Analog_Value_Read_Property(
             break;
     }
 
-    /*  only array properties can have array options.
-        CORRECTION: on vérifie seulement si un index NON-BACNET_ARRAY_ALL
-        a été spécifié sur une propriété scalaire (pas PRIORITY_ARRAY
-        ni EVENT_TIME_STAMPS). Sans cette correction, toutes les lectures
-        normales retournaient PROPERTY_IS_NOT_AN_ARRAY. */
+   
     if ((apdu_len >= 0) &&
         (rpdata->object_property != PROP_PRIORITY_ARRAY) &&
         (rpdata->object_property != PROP_EVENT_TIME_STAMPS) &&
         (rpdata->array_index != BACNET_ARRAY_ALL) &&
-        (rpdata->array_index != 0)) {          /* ← CORRECTION: ignorer index=0 (lecture normale) */
+        (rpdata->array_index != 0)) {         
         rpdata->error_class = ERROR_CLASS_PROPERTY;
         rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         apdu_len = BACNET_STATUS_ERROR;
@@ -550,10 +558,8 @@ bool Analog_Value_Write_Property(
 
     switch (wp_data->object_property) {
         case PROP_PRESENT_VALUE:
-            /* ── Vérification verrou BV0 ──────────────────────────────
-               BV0=ACTIVE   (1) → mode MANUEL → écriture YABE autorisée
-               BV0=INACTIVE (0) → mode AUTO   → Schedule pilote, refusé
-            ─────────────────────────────────────────────────────────── */
+
+
             if (!Binary_Value_Is_Control_Enabled()) {
                 ESP_LOGW(TAG, "AV modification DENIED - Control is disabled via BV0");
                 wp_data->error_class = ERROR_CLASS_PROPERTY;
@@ -562,29 +568,15 @@ bool Analog_Value_Write_Property(
             }
 
             if (value.tag == BACNET_APPLICATION_TAG_REAL) {
-                /* Command priority 6 is reserved for use by Minimum On/Off
-                   algorithm and may not be used for other purposes in any
-                   object. */
+            
                 if (Analog_Value_Present_Value_Set(wp_data->object_instance,
                         value.type.Real, wp_data->priority)) {
                     status = true;
-
-                    /* ── Appliquer le PWM physique via av_pwm_apply() ──────
-                       AV0 → GPIO42 (AO0 EdgeBox)
-                       AV1 → GPIO41 (AO1 EdgeBox)
-                       AV2 → virtuel (pas de sortie physique)
-                    ─────────────────────────────────────────────────────── */
-                    av_pwm_apply(wp_data->object_instance, value.type.Real);
-              
-                    /* Sauvegarde en FRAM pour persistance après coupure */
                     rfm_save_av_state(
                         Analog_Value_Present_Value(0),
                         Analog_Value_Present_Value(1));
 
                 } else if (wp_data->priority == 6) {
-                    /* Command priority 6 is reserved for use by Minimum On/Off
-                       algorithm and may not be used for other purposes in any
-                       object. */
                     wp_data->error_class = ERROR_CLASS_PROPERTY;
                     wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
                 } else {

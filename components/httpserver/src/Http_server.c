@@ -22,19 +22,22 @@ extern void av_pwm_apply(uint32_t instance, float percent);
 typedef struct {
     char  time_str[10];  /* "HH:MM" */
     char  date_str[12];  /* "MM-DD" */
-    float av0;
-    float av1;
+    float value;
     bool  valid;
 } tl_hist_entry_t;
 
-static tl_hist_entry_t s_tl_hist[TL_HIST_MAX];
-static int   s_tl_head  = 0;   /* prochain index d'écriture */
-static int   s_tl_count = 0;   /* entrées valides */
+static tl_hist_entry_t s_tl_hist0[TL_HIST_MAX];
+static tl_hist_entry_t s_tl_hist1[TL_HIST_MAX];
+static int   s_tl_head0  = 0;   /* prochain index d'écriture */
+static int   s_tl_head1  = 0;   /* prochain index d'écriture */
+static int   s_tl_count0 = 0;   /* entrées valides */
+static int   s_tl_count1 = 0;   /* entrées valides */
 static SemaphoreHandle_t s_tl_mutex = NULL;
 
-/* Called from schedule_task every hour */
-void http_trendlog_record(float av0, float av1)
+/* Record a single output change value for a specific TrendLog */
+void http_trendlog_record(uint32_t index, float value)
 {
+    if (index > 1) return;
     if (!s_tl_mutex) {
         s_tl_mutex = xSemaphoreCreateMutex();
     }
@@ -43,20 +46,26 @@ void http_trendlog_record(float av0, float av1)
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
 
-    tl_hist_entry_t *e = &s_tl_hist[s_tl_head];
+    tl_hist_entry_t *e = (index == 0) ? &s_tl_hist0[s_tl_head0]
+                                      : &s_tl_hist1[s_tl_head1];
     snprintf(e->time_str, sizeof(e->time_str), "%02d:%02d",
              (int)(t->tm_hour & 0x1F), (int)(t->tm_min & 0x3F));
     snprintf(e->date_str, sizeof(e->date_str), "%02d/%02d",
              (int)(t->tm_mday & 0x1F), (int)((t->tm_mon+1) & 0x0F));
-    e->av0   = av0;
-    e->av1   = av1;
+    e->value = value;
     e->valid = true;
 
-    s_tl_head = (s_tl_head + 1) % TL_HIST_MAX;
-    if (s_tl_count < TL_HIST_MAX) s_tl_count++;
+    if (index == 0) {
+        s_tl_head0 = (s_tl_head0 + 1) % TL_HIST_MAX;
+        if (s_tl_count0 < TL_HIST_MAX) s_tl_count0++;
+    } else {
+        s_tl_head1 = (s_tl_head1 + 1) % TL_HIST_MAX;
+        if (s_tl_count1 < TL_HIST_MAX) s_tl_count1++;
+    }
 
     xSemaphoreGive(s_tl_mutex);
-    ESP_LOGI("http_srv", "[TL] Entry recorded %s/%s AV0=%.1f AV1=%.1f", e->date_str, e->time_str, av0, av1);
+    ESP_LOGI("http_srv", "[TL] Entry recorded TL%u %s/%s value=%.1f", (unsigned)index,
+             e->date_str, e->time_str, value);
 }
 
 static const char *TAG = "http_srv";
@@ -720,40 +729,44 @@ static esp_err_t handler_se_clear(httpd_req_t *req)
 static esp_err_t handler_trendlog(httpd_req_t *req)
 {
     if (!s_tl_mutex) s_tl_mutex = xSemaphoreCreateMutex();
-    if (s_tl_count == 0) {
-        extern float Analog_Value_Present_Value(uint32_t);
-        http_trendlog_record(Analog_Value_Present_Value(0), Analog_Value_Present_Value(1));
-    }
     cJSON *root = cJSON_CreateObject();
     cJSON *arr0 = cJSON_CreateArray();
     cJSON *arr1 = cJSON_CreateArray();
     if (xSemaphoreTake(s_tl_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
-        int start = (s_tl_count < TL_HIST_MAX) ? 0 : s_tl_head;
-        for (int i = 0; i < s_tl_count; i++) {
-            int idx = (start + i) % TL_HIST_MAX;
-            tl_hist_entry_t *e = &s_tl_hist[idx];
+        int start0 = (s_tl_count0 < TL_HIST_MAX) ? 0 : s_tl_head0;
+        for (int i = 0; i < s_tl_count0; i++) {
+            int idx = (start0 + i) % TL_HIST_MAX;
+            tl_hist_entry_t *e = &s_tl_hist0[idx];
             if (!e->valid) continue;
             char label[24];
             snprintf(label, sizeof(label), "%s %s", e->date_str, e->time_str);
-            cJSON *e0 = cJSON_CreateObject();
-            cJSON_AddStringToObject(e0, "t", label);
-            cJSON_AddNumberToObject(e0, "v", e->av0);
-            cJSON_AddItemToArray(arr0, e0);
-            cJSON *e1 = cJSON_CreateObject();
-            cJSON_AddStringToObject(e1, "t", label);
-            cJSON_AddNumberToObject(e1, "v", e->av1);
-            cJSON_AddItemToArray(arr1, e1);
+            cJSON *entry = cJSON_CreateObject();
+            cJSON_AddStringToObject(entry, "t", label);
+            cJSON_AddNumberToObject(entry, "v", e->value);
+            cJSON_AddItemToArray(arr0, entry);
+        }
+        int start1 = (s_tl_count1 < TL_HIST_MAX) ? 0 : s_tl_head1;
+        for (int i = 0; i < s_tl_count1; i++) {
+            int idx = (start1 + i) % TL_HIST_MAX;
+            tl_hist_entry_t *e = &s_tl_hist1[idx];
+            if (!e->valid) continue;
+            char label[24];
+            snprintf(label, sizeof(label), "%s %s", e->date_str, e->time_str);
+            cJSON *entry = cJSON_CreateObject();
+            cJSON_AddStringToObject(entry, "t", label);
+            cJSON_AddNumberToObject(entry, "v", e->value);
+            cJSON_AddItemToArray(arr1, entry);
         }
         xSemaphoreGive(s_tl_mutex);
     }
     cJSON *obj0 = cJSON_CreateObject();
     cJSON_AddStringToObject(obj0, "name", "Zone A (AV0)");
-    cJSON_AddNumberToObject(obj0, "count", s_tl_count);
+    cJSON_AddNumberToObject(obj0, "count", s_tl_count0);
     cJSON_AddItemToObject(obj0, "entries", arr0);
     cJSON_AddItemToObject(root, "tl0", obj0);
     cJSON *obj1 = cJSON_CreateObject();
     cJSON_AddStringToObject(obj1, "name", "Zone B (AV1)");
-    cJSON_AddNumberToObject(obj1, "count", s_tl_count);
+    cJSON_AddNumberToObject(obj1, "count", s_tl_count1);
     cJSON_AddItemToObject(obj1, "entries", arr1);
     cJSON_AddItemToObject(root, "tl1", obj1);
     char *json = cJSON_Print(root);

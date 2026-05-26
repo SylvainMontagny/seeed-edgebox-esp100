@@ -1,18 +1,3 @@
-/**
- * @file trendlog.c
- * @brief Trend Log object - adapté pour ESP32-S3 EdgeBox éclairage public
- *
- * Modifications par rapport à la stack originale :
- *  - Includes adaptés au projet (pas de "bacnet/..." mais "bacdef.h" etc.)
- *  - MAX_TREND_LOGS = 2  (TL0 → AV0, TL1 → AV1)
- *  - TL_MAX_ENTRIES = 100 (économie RAM)
- *  - Trend_Log_Init() : pas de données de test, config réelle AV0/AV1
- *  - Device_getCurrentDateTime() : disponible dans device.c du projet
- *  - BACNET_STACK_EXPORT supprimé (non défini dans ce projet)
- *  - bacnet_tag_decode / bacnet_*_decode remplacés par decode_* du projet
- *  - local_read_property() utilise Device_Read_Property() du projet
- */
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -29,13 +14,14 @@
 #include "trendlog.h"
 #include <time.h>
 #include "handlers.h"
-
+#include "esp_log.h"
 /* ---------------------------------------------------------------
  * Stockage statique — 2 logs × 100 entrées
  * Calcul RAM : 2 × 100 × sizeof(TL_DATA_REC) ≈ 2 × 100 × 16 = 3.2 KB
  * --------------------------------------------------------------- */
 static TL_DATA_REC  Logs[MAX_TREND_LOGS][TL_MAX_ENTRIES] BACNET_EXT_RAM_ATTR;
 static TL_LOG_INFO  LogInfo[MAX_TREND_LOGS] BACNET_EXT_RAM_ATTR;
+static const char *TAG = "AV";
 
 /* ---------------------------------------------------------------
  * Listes de propriétés (ReadPropertyMultiple)
@@ -105,18 +91,15 @@ unsigned Trend_Log_Instance_To_Index(uint32_t object_instance)
     return MAX_TREND_LOGS; /* invalide */
 }
 
-/* ---------------------------------------------------------------
- * Heure courante via Device_getCurrentDateTime() du projet
- * --------------------------------------------------------------- */
+
 static bacnet_time_t Trend_Log_Epoch_Seconds_Now(void)
 {
     time_t now = time(NULL);
     return (bacnet_time_t)now;
 }
 
-/* ---------------------------------------------------------------
- * Initialisation
- * --------------------------------------------------------------- */
+
+
 void Trend_Log_Init(void)
 {
     static bool initialized = false;
@@ -133,8 +116,8 @@ void Trend_Log_Init(void)
         LogInfo[i].bStopWhenFull    = false;
         LogInfo[i].bAlignIntervals  = false;
         LogInfo[i].bTrigger         = false;
-        LogInfo[i].LoggingType      = LOGGING_TYPE_POLLED;
-        LogInfo[i].ulLogInterval    = 60;
+        LogInfo[i].LoggingType      = LOGGING_TYPE_TRIGGERED;
+        LogInfo[i].ulLogInterval    = 0;
         LogInfo[i].ulIntervalOffset = 0;
         LogInfo[i].iIndex           = 0;
         LogInfo[i].ulRecordCount    = 0;
@@ -157,12 +140,9 @@ void Trend_Log_Init(void)
         datetime_wildcard_set(&LogInfo[i].StopTime);
     }
 
-    printf("Trend_Log_Init: TL0→AV0, TL1→AV1, interval=60s, entries_max=%d\n",
-           TL_MAX_ENTRIES);
+    ESP_LOGI(TAG, "Trend_Log_Init: TL0→AV0, TL1→AV1, event-driven, entries_max=%d\n",TL_MAX_ENTRIES);
 }
-/* ---------------------------------------------------------------
- * Nom de l'objet
- * --------------------------------------------------------------- */
+
 bool Trend_Log_Object_Name(
     uint32_t object_instance,
     BACNET_CHARACTER_STRING *object_name)
@@ -191,9 +171,7 @@ bool Trend_Log_Object_Name(
     return false;
 }
 
-/* ---------------------------------------------------------------
- * Read Property
- * --------------------------------------------------------------- */
+
 int Trend_Log_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
     int apdu_len = 0;
@@ -319,9 +297,6 @@ int Trend_Log_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     return apdu_len;
 }
 
-/* ---------------------------------------------------------------
- * Write Property
- * --------------------------------------------------------------- */
 bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
     bool status = false;
@@ -559,9 +534,15 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     return status;
 }
 
-/* ---------------------------------------------------------------
- * ReadRange glue
- * --------------------------------------------------------------- */
+void Trend_Log_Record(uint32_t object_instance)
+{
+    int log_index = Trend_Log_Instance_To_Index(object_instance);
+    if (log_index >= MAX_TREND_LOGS) return;
+    if (!TL_Is_Enabled(log_index)) return;
+    TL_fetch_property(log_index);
+}
+
+
 bool TrendLogGetRRInfo(BACNET_READ_RANGE_DATA *pRequest, RR_PROP_INFO *pInfo)
 {
     int log_index = Trend_Log_Instance_To_Index(pRequest->object_instance);
@@ -580,9 +561,7 @@ bool TrendLogGetRRInfo(BACNET_READ_RANGE_DATA *pRequest, RR_PROP_INFO *pInfo)
     return false;
 }
 
-/* ---------------------------------------------------------------
- * Insertion d'un enregistrement de statut
- * --------------------------------------------------------------- */
+
 void TL_Insert_Status_Rec(int iLog, BACNET_LOG_STATUS eStatus, bool bState)
 {
     TL_LOG_INFO *CurrentLog = &LogInfo[iLog];
@@ -613,9 +592,7 @@ void TL_Insert_Status_Rec(int iLog, BACNET_LOG_STATUS eStatus, bool bState)
     if (CurrentLog->ulRecordCount < TL_MAX_ENTRIES) CurrentLog->ulRecordCount++;
 }
 
-/* ---------------------------------------------------------------
- * Vérifie si le log est actuellement actif
- * --------------------------------------------------------------- */
+
 bool TL_Is_Enabled(int iLog)
 {
     TL_LOG_INFO *CurrentLog = &LogInfo[iLog];
@@ -642,9 +619,7 @@ bool TL_Is_Enabled(int iLog)
     return (tNow >= CurrentLog->tStartTime && tNow <= CurrentLog->tStopTime);
 }
 
-/* ---------------------------------------------------------------
- * Conversions temps
- * --------------------------------------------------------------- */
+
 bacnet_time_t TL_BAC_Time_To_Local(const BACNET_DATE_TIME *bdatetime)
 {
     struct tm t = {0};
@@ -672,10 +647,7 @@ void TL_Local_Time_To_BAC(BACNET_DATE_TIME *bdatetime, bacnet_time_t seconds)
     bdatetime->time.hundredths = 0;
 }
 
-/* ---------------------------------------------------------------
- * Lecture locale de la valeur surveillée (AV0 ou AV1)
- * Utilise Device_Read_Property() disponible dans device.c
- * --------------------------------------------------------------- */
+
 static int local_read_property(
     uint8_t *value_buf,
     uint8_t *status_buf,
@@ -715,10 +687,8 @@ static int local_read_property(
     return len;
 }
 
-/* ---------------------------------------------------------------
- * Lecture et stockage de la valeur AV surveillée
- * --------------------------------------------------------------- */
-static void TL_fetch_property(int iLog)
+
+ void TL_fetch_property(int iLog)
 {
     uint8_t ValueBuf[MAX_APDU];
     uint8_t StatusBuf[4];
@@ -790,11 +760,28 @@ store:
     if (CurrentLog->iIndex >= TL_MAX_ENTRIES) CurrentLog->iIndex = 0;
     CurrentLog->ulTotalRecordCount++;
     if (CurrentLog->ulRecordCount < TL_MAX_ENTRIES) CurrentLog->ulRecordCount++;
+
+    switch (TempRec.ucRecType) {
+        case TL_TYPE_REAL:
+           ESP_LOGI(TAG,"TrendLog[%d] stored REAL value %.2f\n", iLog, TempRec.Datum.fReal);
+            break;
+        case TL_TYPE_UNSIGN:
+            ESP_LOGI(TAG,"TrendLog[%d] stored UNSIGNED value %lu\n", iLog, (unsigned long)TempRec.Datum.ulUValue);
+            break;
+        case TL_TYPE_NULL:
+            ESP_LOGI(TAG,"TrendLog[%d] stored NULL record\n", iLog);
+            break;
+        case TL_TYPE_ERROR:
+            ESP_LOGI(TAG,"TrendLog[%d] stored ERROR class=%u code=%u\n", iLog,
+                   TempRec.Datum.Error.usClass,
+                   TempRec.Datum.Error.usCode);
+            break;
+        default:
+            ESP_LOGI(TAG,"TrendLog[%d] stored record type %u\n", iLog, TempRec.ucRecType);
+            break;
+    }
 }
 
-/* ---------------------------------------------------------------
- * Timer — à appeler toutes les secondes depuis schedule_task ou main
- * --------------------------------------------------------------- */
 void trend_log_timer(uint16_t uSeconds)
 {
     TL_LOG_INFO *CurrentLog;

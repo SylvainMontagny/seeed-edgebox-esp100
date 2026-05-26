@@ -103,10 +103,6 @@ typedef struct tl_log_info {
     bacnet_time_t     tLastDataTime;
 } TL_LOG_INFO;
 
-/* ---------------------------------------------------------------
- * API publique
- * --------------------------------------------------------------- */
-
 void     Trend_Log_Init(void);
 void     Trend_Log_Property_Lists(const int **pRequired,
                                   const int **pOptional,
@@ -119,6 +115,8 @@ bool     Trend_Log_Object_Name(uint32_t object_instance,
                                BACNET_CHARACTER_STRING *object_name);
 int      Trend_Log_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
 bool     Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
+
+void     Trend_Log_Record(uint32_t object_instance);
 
 /* Insertion d'un enregistrement de statut */
 void     TL_Insert_Status_Rec(int iLog, BACNET_LOG_STATUS eStatus, bool bState);
@@ -137,7 +135,7 @@ int  TL_encode_by_sequence(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest);
 int  TL_encode_by_time(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest);
 bool TrendLogGetRRInfo(BACNET_READ_RANGE_DATA *pRequest, RR_PROP_INFO *pInfo);
 int  rr_trend_log_encode(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest);
-
+void TL_fetch_property(int iLog);
 /* Timer à appeler régulièrement (ex: toutes les secondes depuis main) */
 void trend_log_timer(uint16_t uSeconds);
 

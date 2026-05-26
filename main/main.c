@@ -176,11 +176,15 @@ static void schedule_task(void *pvParameters)
                     } else {
                         target0 = 0.0f;
                     }
-                    
+
                     if (target0 != g_prev_pv0) {
+                        float before0 = Analog_Value_Present_Value(0);
+                        http_trendlog_record(0, before0);
+                        TL_fetch_property(0);
                         Analog_Value_Present_Value_Set(0, target0, 16);
                         av_pwm_apply(0, target0);
                         ESP_LOGI(TAG, "[SOLAR] Zone A -> %.1f%%", target0);
+                        http_trendlog_record(0, target0);;
                         rfm_save_av_state(target0, Analog_Value_Present_Value(1));
                         g_prev_pv0 = target0;
                     }
@@ -196,26 +200,23 @@ static void schedule_task(void *pvParameters)
                     } else {
                         target1 = 0.0f;
                     }
-                    
+
                     if (target1 != g_prev_pv1) {
+                        float before1 = Analog_Value_Present_Value(1);
+                        http_trendlog_record(1, before1);
+                        TL_fetch_property(1);
                         Analog_Value_Present_Value_Set(1, target1, 16);
                         av_pwm_apply(1, target1);
                         ESP_LOGI(TAG, "[SOLAR] Zone B -> %.1f%%", target1);
+                        http_trendlog_record(1, target1);
                         rfm_save_av_state(Analog_Value_Present_Value(0), target1);
                         g_prev_pv1 = target1;
                     }
                 }
             }
         
-
-        trend_log_timer(1);
         Calendar_Update_Present_Value(0);
 
-        if (btime.min == 0 && btime.sec < 2) {
-            http_trendlog_record(
-                Analog_Value_Present_Value(0),
-                Analog_Value_Present_Value(1));
-        }
 
     vTaskDelay(pdMS_TO_TICKS(1000));
     }
@@ -283,6 +284,7 @@ void app_main(void)
     } else {
         ESP_LOGE(TAG, "[BOOT] FRAM/RTC unavailable");
     }
+
 
     bool connected = network_initialize();
 
