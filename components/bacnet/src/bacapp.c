@@ -1725,7 +1725,7 @@ void testBACnetApplicationData_Safe(
                 break;
 
             case BACNET_APPLICATION_TAG_OBJECT_ID:
-                input_value[i].type.Object_Id.instance = 1234;
+                input_value[i].type.Object_Id.instance = BACNET_DEVICE_ID;
                 input_value[i].type.Object_Id.type = 12;
                 break;
 

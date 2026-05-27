@@ -62,22 +62,6 @@ menu "Configuration"
         help
             GPIO number (IOxx) to read the button state.
             Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used.
-            
-    config SERVER_DEVICE_ID
-        int "Bacnet server device id"
-        range 0 4194304
-        default 200004 if IDF_TARGET_ESP32C3
-        default 200003
-        help
-            Bacnet server device id
-
-    config CLIENT_DEVICE_ID
-        int "Bacnet client device id"
-        range 0 4194304
-        default 200003 if IDF_TARGET_ESP32C3
-        default 200004
-        help
-            Bacnet client device id
 
     config WIFI_SSID
         string "WiFi SSID"
@@ -122,5 +106,11 @@ config SOLAR_OVERRIDE_FRAM_ON_BOOT
       When enabled, the values configured in menuconfig for solar latitude/longitude
       will be written to FRAM during initialization, replacing any previously
       persisted coordinates.
+config BACNET_DEVICE_ID
+    int "Bacnet device id"
+    range 0 4194304
+    default 200003
+    help
+        Bacnet device id
 
 endmenu

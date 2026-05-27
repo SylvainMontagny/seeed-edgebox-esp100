@@ -369,7 +369,7 @@ static void testDevIdPropRef(
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE inData;
 
     /* everything encoded */
-    inData.objectIdentifier.instance = 0x1234;
+    inData.objectIdentifier.instance = BACNET_DEVICE_ID;
     inData.objectIdentifier.type = 15;
     inData.propertyIdentifier = 25;
     inData.arrayIndex = 0x5678;
@@ -377,7 +377,7 @@ static void testDevIdPropRef(
     inData.deviceIndentifier.type = OBJECT_DEVICE;
     testDevObjPropRef(pTest, &inData);
     /* optional array */
-    inData.objectIdentifier.instance = 0x1234;
+    inData.objectIdentifier.instance = BACNET_DEVICE_ID;
     inData.objectIdentifier.type = 15;
     inData.propertyIdentifier = 25;
     inData.arrayIndex = BACNET_ARRAY_ALL;
@@ -385,7 +385,7 @@ static void testDevIdPropRef(
     inData.deviceIndentifier.type = OBJECT_DEVICE;
     testDevObjPropRef(pTest, &inData);
     /* optional device ID */
-    inData.objectIdentifier.instance = 0x1234;
+    inData.objectIdentifier.instance = BACNET_DEVICE_ID;
     inData.objectIdentifier.type = 15;
     inData.propertyIdentifier = 25;
     inData.arrayIndex = 1;
@@ -393,7 +393,7 @@ static void testDevIdPropRef(
     inData.deviceIndentifier.type = BACNET_NO_DEV_TYPE;
     testDevObjPropRef(pTest, &inData);
     /* optional array + optional device ID */
-    inData.objectIdentifier.instance = 0x1234;
+    inData.objectIdentifier.instance = BACNET_DEVICE_ID;
     inData.objectIdentifier.type = 15;
     inData.propertyIdentifier = 25;
     inData.arrayIndex = BACNET_ARRAY_ALL;
@@ -411,7 +411,7 @@ static void testDevIdRef(
     int inLen;
     int outLen;
 
-    inData.deviceIndentifier.instance = 0x4343;
+    inData.deviceIndentifier.instance = BACNET_DEVICE_ID;
     inData.deviceIndentifier.type = OBJECT_DEVICE;
     inLen = bacapp_encode_device_obj_ref(buffer, &inData);
     outLen = bacapp_decode_device_obj_ref(buffer, &outData);

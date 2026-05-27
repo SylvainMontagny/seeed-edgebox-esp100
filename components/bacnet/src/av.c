@@ -560,12 +560,7 @@ bool Analog_Value_Write_Property(
         case PROP_PRESENT_VALUE:
 
 
-            if (!Binary_Value_Is_Control_Enabled()) {
-                ESP_LOGW(TAG, "AV modification DENIED - Control is disabled via BV0");
-                wp_data->error_class = ERROR_CLASS_PROPERTY;
-                wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
-                return false;
-            }
+
 
             if (value.tag == BACNET_APPLICATION_TAG_REAL) {
             

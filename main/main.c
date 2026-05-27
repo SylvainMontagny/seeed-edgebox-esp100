@@ -46,10 +46,7 @@
 #include "modem.h"
 #include "ntp.h"
 #include "gpiooutputs.h"
-
-#define SERVER_DEVICE_ID 1234
 static const char *TAG = "main";
-
 /* Reconnect task for the selected network interface */
 
 
@@ -251,7 +248,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     led_initialize();
     ledc_initialize();
-    Device_Set_Object_Instance_Number(SERVER_DEVICE_ID);
+    Device_Set_Object_Instance_Number(CONFIG_BACNET_DEVICE_ID);
     ESP_LOGI(TAG, "BACnet Stack %s | Device ID: %lu",
              BACnet_Version, (unsigned long)Device_Object_Instance_Number());
     address_init();
