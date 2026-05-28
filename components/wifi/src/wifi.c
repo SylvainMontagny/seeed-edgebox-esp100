@@ -33,6 +33,7 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
         } else {
             xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
         }
+        g_connected   = false;
         ESP_LOGI(TAG,"connect to the AP fail");
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
@@ -74,22 +75,26 @@ bool wifi_initialize(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     ESP_ERROR_CHECK(esp_wifi_start() );
 
-    ESP_LOGI(TAG, "wifi_init_sta finished. Connecting to SSID: %s", CONFIG_WIFI_SSID);
-
     /* Wait for either success or failure from the WiFi event handler */
+
     EventBits_t bits = xEventGroupWaitBits(wifi_event_group,
             WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
             pdFALSE,
             pdFALSE,
             portMAX_DELAY);
 
-    if (bits & WIFI_CONNECTED_BIT) {
+    if (bits & WIFI_CONNECTED_BIT) 
+    {
+        g_connected   = true;
         ESP_LOGI(TAG, "connected to ap SSID:%s", CONFIG_WIFI_SSID);
         return true;
     } else if (bits & WIFI_FAIL_BIT) {
+        g_connected   = false;
         ESP_LOGI(TAG, "Failed to connect to SSID:%s", CONFIG_WIFI_SSID);
         return false;
-    } else {
+    } else 
+    {
+        g_connected   = false;
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
         return false;
     }

@@ -56,13 +56,8 @@ static void reconnect_task(void *pvParameters)
     for (;;) {
     if (!g_connected) 
     {
-         ESP_LOGI(TAG, "[RECONNECT] WiFi mode");
+        ESP_LOGI(TAG, "[RECONNECT] WiFi mode");
         ESP_LOGW(TAG, "[RECONNECT] Waiting for WiFi connection...");
-        for (;;) {
-            vTaskDelay(pdMS_TO_TICKS(5000));
-            if (g_connected) break;
-        }
-
         ntp_initialize();
         rfm_time_init(true);
 

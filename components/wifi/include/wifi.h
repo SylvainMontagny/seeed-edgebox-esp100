@@ -6,3 +6,4 @@
 #include <stdbool.h>
 
 bool wifi_initialize(void);
+extern volatile bool g_connected;
