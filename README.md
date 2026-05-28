@@ -1,64 +1,106 @@
-# seed_edgebox_esp100
-## Description
+# Seeed EdgeBox ESP100 BACnet Lighting Controller
 
-This project implements a bacnet server for the Seed EdgeBox ESP100. 
-It is originaly developed for a public lighting project, having PWM outputs to control the brightness of the lamps,depending on the time of the day and bacnet schedules.
-It is implemented in C ans uses the BACnet stack from the BACnet Stack project.
+This smart lighting controller is a simple and reliable BACnet solution aimed to be used with a remote BACnet client (4G private APN) in smart cities. In uses the  <a href="https://www.seeedstudio.com/EdgeBox-ESP-100-p-5490.html" target="_blank">Seeed EdgeBox ESP100</a>.
 
-## Built With
+I (5876) RFM: [TIME INIT] Source: NTP (4G connected) alors qu'on est en WiFi
 
-The project was made with freeRTOS in C, using the ESP-IDF framework for the ESP32 microcontroller available as a VSCode extension. 
-The BACnet stack is used for the BACnet/IP communication.
+## Overview
 
-The versions used for the project are:
-- ESP-IDF: v5.5.4
-- BACnet Stack: v0.8.0
-- FreeRTOS: v10.5.1
+This firmware runs on ESP32-S3 (Seeed EdgeBox ESP100) and provides:
 
-## Installation  
+- BACnet/IP server
+- Network connectivity through either Wi-Fi or 4G/LTE
+- 2 Analog Output (PWM??) lighting zones (Zone A and Zone B)
+- Ephemeris managment (sunrise/sunset time according to GPS coordinates)
+- BACnet Weekly schedules and special events to control ligthning
+- Persistent storage of runtime state (BACnet object values) in FRAM
+- Local HTTP dashboard for monitoring and configuration
+- RTC support to keep track of time
+- NTP time update
 
-To build and flash the project to the ESP32, follow these steps:
+The project is implemented in C wtih ESP-IDF framework (FreeRTOS) and uses an open source BACnet stack (<a href="https://github.com/bacnet-stack/bacnet-stack" target="_blank">bacnet-stack</a>).
 
-1. Clone the github repository.
+## Requirements
+
+- ESP-IDF (project has been developed with v5.5.x) :
+- VScode extension (but should work with other ESP-IDF installation)
+- EdgeBox ESP100 : 
+    - CPU : ESP32-S3
+    - Internal RAM : 512 KB
+    - External RAM (PSRAM) : 8 MB
+    - Flash : 16 MB
+    - WiFi / BLE / 4G
+    - 4 Digital Inputs, 6 Digital Outputs
+    - 4 Analog Inputs, 2 Analog Outputs
+- 
+## Main Capabilities
+
+- BACnet objects initialized at startup:
+	- 2 Schedules (1 for each zone)
+	- 2 Analog Values (1 for each zone)
+	- 2 Trend Log (1 for each Analog Value)
+- Two zones con be controlled:
+	- AV0 mapped to PWM GPIO42 (Zone A)
+	- AV1 mapped to PWM GPIO41 (Zone B)
+- Solar control behavior:
+	- Daytime: when BACnet schedule reach a daytime, AV0 and AV1 are forced to 0% by internal logic.
+	- Night time: when BACnet schedule read a nigh time, AV0 and AV1 output follows each zone schedule/special events.
+	- Force lightning : AV0 and AV1 can be force to a specific value at any time (day and night) using BACnet Write service. This will turn on/off light even during daytime.
+- Logging :
+	- Trend log  object log changes of value for AV0 and AV1. 
+	- Boot, sync, connectivity status , and value changes persisted in FRAM event log
+- Local configuration and debug (HTTP Server)
+	- History trend log available on the user interface
+	- FRAM logs available on the user interface
+	- Special events configuration with the user interface
+- Time handling:
+	- NTP synchronization
+	- Timezone inferred from configured solar latitude/longitude
+
+
+## Web Interface and API
+
+The embedded web UI is served on port 80. It includes:
+
+- Live zone A and B status (values of AV1 and AV0)
+- Sunrise and sunset time calculation (lat/long + configurable offsets)
+- Special events management
+- Event log view
+- Trend history view
+
+## Default Scheduling
+
+At startup, a default weekly schedules is applied for each schedule object:
+- 17:00 to 01:00 -> 100%
+- 05:00 to 10:00 -> 100%
+
+But the output still depends on daylight.
+
+## Project Structure
+
+- main
+- components/bacnetserver: BACnet service handlers and object table setup
+- components/httpserver: embedded web app + REST API
+- components/solar: sunrise/sunset and timezone logic
+- components/wifi: Wi-Fi connection management
+- components/modem: SIM7600 PPP connection and reconnect logic
+- components/gpiooutputs: LEDC PWM output control
+- components/fram: FRAM read/write access
+- components/rtc: RTC driver
+- components/ntp: time synchronisation
+
+## Installation, Build, Flash, Monitor
+
+1. Clone this github repository.
 2. Install the ESP-IDF framework and set up the development environment.
-3. Configure the project by editing the sdkconfig file to set the wifi/4G credential, GPS coordinates, and other settings.
-4. Use the VSCode extension build tool or navigate to the project directory and run `idf.py build` to build the project.
-5. Connect the ESP32 to your computer and use the VSCode extension flash tool, or run `idf.py flash` to flash the project to the ESP32.
-6. Monitor the serial output using the VSCode extension monitor tool, or any other serial monitor, to see logs and debug information.
-
-## Usage
-
-Once the project is built and flashed to the ESP32, it will start the BACnet server and connect to the configured wifi/4G network.  
-
-You can then use a BACnet client such as yabe to connect to the server and interact with the BACnet objects.
-
-You can also access the http server for configuration and monitoring by entering the ESP32's IP address in a web browser.
-
-The PWM outputs can be used to control the brightness of the lamps based on the schedules and solar calculations.
-There is two pwm outputs, called zone A and zone B, they are independent, each having an associated analog value, schedule and trend log object.
-The solar calculation provide a flag indicating if the sun is up or down, the PWM values are 100 in case the sun is down and 0 in case the sun is up.
-
-The default weeky schedule will set the PWM values to 0 during the night between 01:00 and 05:00, there is the possiblitity to add special event for specific days and times to set the PWM to a chosen value, this can be done directly from a bacnet client or using the http server. 
-
-There is the possibility of adding an offset to sunset or sunrise time by changing the analog values named "Sunrise offset analog value" and "Sunset offset analog value", the sunrise offset is the time in minutes after sunrise , and the sunset offset is the time in minutes before sunset.
-
-You can also edit the analog output "Zone A output analog value" and "Zone B output analog value" to set the PWM values directly, this will override the schedule and solar calculation until the next scheduled change or solar event.
-
-Trend Log object will log the pwm values each times they change. 
-
-The bacnet device time is the current time in the timezone of the GPS coordinates.
-
-## Features
-
-The following features are implemented:
-- BACnet/IP communication
-- BACnet objects: Device, Analog Output, Schedule, Trend Log
-- Wifi connectivity
-- 4G connectivity 
-- two PWM GPIO outputs 
-- Time synchronization with NTP server
-- fram memory for data persistence
-- http server for configuration and monitoring
-- Solar calculation based on GPS coordinates and time of the day
-- 8Mb external psram allow for a large number of bacnet objects and data logging
-
+3. Run the target selection (esp32s3) `idf.py set-target esp32s3`
+4. Run menuconfig `idf.py menuconfig` to configure the project :
+   - the connectivity mode (WiFi or 4G)
+   - MODEM_APN : the 4G APN (in case of 4G connectivity)
+   - WIFI_SSID / WIFI_PASSWORD : the WiFi credentials (in case of WiFi connectivity)
+   - the GPS coordinates (in order to calculate day and night time)
+   - BACNET_DEVICE_NAME / BACNET_DEVICE_ID : the BACnet device id and name. 
+5. Run `idf.py build` to build the project.
+6. Connect the ESP32 to your computer and select the right COM port.
+7. Run `idf.py flash` to flash the project to the ESP32.
+8. Monitor the serial output using any serial monitor (115200 bps) to see logs and debug information.
