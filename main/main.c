@@ -52,9 +52,10 @@ static const char *TAG = "main";
 
 static void reconnect_task(void *pvParameters)
 {
-    ESP_LOGI(TAG, "[RECONNECT] WiFi mode");
-
+   
+    for (;;) {
     if (!g_connected) {
+         ESP_LOGI(TAG, "[RECONNECT] WiFi mode");
         ESP_LOGW(TAG, "[RECONNECT] Waiting for WiFi connection...");
         for (;;) {
             vTaskDelay(pdMS_TO_TICKS(5000));
@@ -83,8 +84,8 @@ static void reconnect_task(void *pvParameters)
         ESP_LOGI(TAG, "[RECONNECT] BACnet started");
     }
 
-    for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(30000));
+
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
