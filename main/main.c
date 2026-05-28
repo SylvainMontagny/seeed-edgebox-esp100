@@ -54,7 +54,8 @@ static void reconnect_task(void *pvParameters)
 {
    
     for (;;) {
-    if (!g_connected) {
+    if (!g_connected) 
+    {
          ESP_LOGI(TAG, "[RECONNECT] WiFi mode");
         ESP_LOGW(TAG, "[RECONNECT] Waiting for WiFi connection...");
         for (;;) {
@@ -75,16 +76,7 @@ static void reconnect_task(void *pvParameters)
             setenv("BACNET_IFACE", ip_str, 1);
             ESP_LOGI(TAG, "[BACNET] WiFi interface set: %s", ip_str);
         }
-
-        dlenv_init();
-        atexit(datalink_cleanup);
-        Send_I_Am(&Handler_Transmit_Buffer[0]);
-        xTaskCreate(server_task, "bacnet_server", 8000, NULL, 1, NULL);
-        g_bacnet_started = true;
-        ESP_LOGI(TAG, "[RECONNECT] BACnet started");
     }
-
-
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
@@ -320,7 +312,6 @@ void app_main(void)
         dlenv_init();
         atexit(datalink_cleanup);
         Send_I_Am(&Handler_Transmit_Buffer[0]);
-
         xTaskCreate(server_task, "bacnet_server", 8000, NULL, 1, NULL);
         
 #ifdef CONFIG_NETWORK_CONNECTION_4G
