@@ -62,8 +62,8 @@ static void wifi_reconnect_task(void *pvParameters)
 
             wifi_force_reconnect();
             
-            esp_netif_ip_info_t ip_info;
-            esp_netif_t *wifi_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+                  esp_netif_ip_info_t ip_info;
+        esp_netif_t *wifi_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
             if (wifi_netif && esp_netif_get_ip_info(wifi_netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0)
             {
                 char ip_str[32];
@@ -116,6 +116,7 @@ static void schedule_task(void *pvParameters)
     BACNET_TIME btime;
     SCHEDULE_DESCR *desc0 = NULL;
     SCHEDULE_DESCR *desc1 = NULL;
+
     struct tm *t;
     time_t now;
 
@@ -147,6 +148,7 @@ static void schedule_task(void *pvParameters)
     }
 
     for (;;) {
+        ESP_LOGI(TAG,"av1 = %f", Analog_Value_Present_Value(1));
         now = time(NULL);
         t   = localtime(&now);
 
@@ -191,7 +193,7 @@ static void schedule_task(void *pvParameters)
                         http_trendlog_record(0, before0);
                         TL_fetch_property(0);
                         Analog_Value_Present_Value_Set(0, target0, 16);
-                        av_pwm_apply(0, target0);
+                        av_pwm_apply(0, (uint32_t)Analog_Value_Present_Value(0));
                         ESP_LOGI(TAG, "[SOLAR] Zone A -> %.1f%%", target0);
                         http_trendlog_record(0, target0);;
                         rfm_save_av_state(target0, Analog_Value_Present_Value(1));
@@ -202,6 +204,7 @@ static void schedule_task(void *pvParameters)
                 /* Zone B control */
                 {
                     float target1;
+
                     if (!is_night) {
                         target1 = 0.0f;
                     } else if (desc1) {
@@ -209,16 +212,15 @@ static void schedule_task(void *pvParameters)
                     } else {
                         target1 = 0.0f;
                     }
-
+                    av_pwm_apply(1,(uint32_t) Analog_Value_Present_Value(1));
                     if (target1 != g_prev_pv1) {
                         float before1 = Analog_Value_Present_Value(1);
                         http_trendlog_record(1, before1);
                         TL_fetch_property(1);
                         Analog_Value_Present_Value_Set(1, target1, 16);
-                        av_pwm_apply(1, target1);
-                        ESP_LOGI(TAG, "[SOLAR] Zone B -> %.1f%%", target1);
+						ESP_LOGI(TAG, "[SOLAR] Zone B -> %.1f%%", target1);
                         http_trendlog_record(1, target1);
-                        rfm_save_av_state(Analog_Value_Present_Value(0), target1);
+                        rfm_save_av_state(target1, Analog_Value_Present_Value(1));
                         g_prev_pv1 = target1;
                     }
                 }
