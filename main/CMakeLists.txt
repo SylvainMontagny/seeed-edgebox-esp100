@@ -14,8 +14,7 @@ idf_component_register(
         nvs_flash
         driver
         esp_event
-        bacnet
-
+        bacnet 
         bacnetserver
         fram
         gpiooutputs

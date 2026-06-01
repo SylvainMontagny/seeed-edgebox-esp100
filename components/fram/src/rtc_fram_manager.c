@@ -149,7 +149,6 @@ void rfm_sync_rtc_from_ntp(void)
 void rfm_time_init(bool ntp_available)
 {
     if (ntp_available) {
-        ESP_LOGI(TAG, "[TIME INIT] Source: NTP (4G connected)");
         rfm_sync_rtc_from_ntp();
         return;
     }

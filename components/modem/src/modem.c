@@ -25,7 +25,6 @@ extern void solar_invalidate_cache(void);
 
 static const char *TAG = "modem";
 
-volatile bool g_connected = false;
 volatile bool g_bacnet_started = false;
 esp_netif_t *g_ppp_netif = NULL;
 esp_modem_dce_t *g_ppp_dce = NULL;
@@ -64,6 +63,22 @@ static void ping_timeout_cb(esp_ping_handle_t hdl, void *args)
     }
 }
 
+
+void modem_check_task(void *pvParameters)
+{
+ 
+    for (;;) {
+        int rssi = -1;
+        int ber = 0;
+        vTaskDelay(pdMS_TO_TICKS(10000));  /* check every 10 seconds */
+       if(esp_modem_get_signal_quality(g_ppp_dce, &rssi, &ber) != ESP_OK) {
+            ESP_LOGW(TAG, "[4G] Failed to get signal quality");
+        } else {
+            ESP_LOGI(TAG, "[4G] Signal quality - RSSI: %d dBm, BER: %d", rssi, ber);
+        }
+    }
+}
+
 static void ping_task(void *pvParameters)
 {
     ip_addr_t target_addr;
@@ -94,6 +109,7 @@ void modem_start_ping_task(void)
     xTaskCreate(ping_task, "ping_task", 4096, NULL, 1, NULL);
 }
 
+
 /* Try a single power-cycle + PPP connection. Returns true if an IP is obtained. */
 bool modem_try_once(void)
 {
@@ -108,8 +124,8 @@ bool modem_try_once(void)
     vTaskDelay(pdMS_TO_TICKS(1500));
     gpio_set_level((gpio_num_t)MODEM_PWR_KEY, 0);
 
-    ESP_LOGI(TAG, "[4G] Waiting for modem boot (45s)...");
-    vTaskDelay(pdMS_TO_TICKS(45000));
+    ESP_LOGI(TAG, "[4G] Waiting for modem boot (15s)...");
+    vTaskDelay(pdMS_TO_TICKS(15000));
 
     if (g_ppp_dce) {
         esp_modem_destroy(g_ppp_dce);
@@ -132,16 +148,21 @@ bool modem_try_once(void)
     g_ppp_dce = esp_modem_new_dev(ESP_MODEM_DCE_SIM7600, &dte_config, &dce_config, g_ppp_netif);
 
     if (!g_ppp_dce) {
-        ESP_LOGE(TAG, "[4G] DCE init failed");
+        ESP_LOGE(TAG, "[4G] DCE initialization failed");
         if (g_ppp_netif) { esp_netif_destroy(g_ppp_netif); g_ppp_netif = NULL; }
         return false;
     }
-
-    if (esp_modem_set_mode(g_ppp_dce, ESP_MODEM_MODE_DATA) != ESP_OK) {
-        ESP_LOGE(TAG, "[4G] Failed to set DATA mode");
-        esp_modem_destroy(g_ppp_dce);  g_ppp_dce = NULL;
+    esp_err_t err = esp_modem_set_mode(g_ppp_dce, ESP_MODEM_MODE_DATA);
+    if (err != ESP_OK) {
+        switch(err) {
+            case ESP_ERR_NOT_SUPPORTED: ESP_LOGE(TAG, "[4G] Modem does not support PPP mode"); break;
+            case ESP_FAIL: ESP_LOGE(TAG, "[4G] Modem switch to DATA mode fail"); break;    
+            default: ESP_LOGE(TAG, "[4G] Failed to set modem mode: %d", err); break;
+        }
+        esp_modem_destroy(g_ppp_dce);   g_ppp_dce = NULL;
         esp_netif_destroy(g_ppp_netif); g_ppp_netif = NULL;
         return false;
+        
     }
 
     ESP_LOGI(TAG, "[4G] Waiting for IP address (30s)...");
@@ -189,15 +210,14 @@ bool modem_initialize(void)
 void modem_reconnect_task(void *pvParameters)
 {
     if (!g_connected) {
-        /* Offline at boot */
-        ESP_LOGW(TAG, "[RECONNECT] Starting offline - attempts every 2 minutes");
+
         for (;;) {
-            vTaskDelay(pdMS_TO_TICKS(120000));  /* 2 minutes */
+            vTaskDelay(pdMS_TO_TICKS(10000));  /* 10 seconds */
 
-            if (g_connected) break;
-
-            ESP_LOGI(TAG, "[RECONNECT] Attempting connection (offline)...");
-
+            if (!g_connected)
+            {
+            /* Offline at boot */
+            ESP_LOGW(TAG, "[RECONNECT] Starting offline - attempts every 10 seconds");
             bool ok = modem_try_once();
             if (ok) {
                 g_connected       = true;
@@ -206,29 +226,7 @@ void modem_reconnect_task(void *pvParameters)
 
                 ntp_initialize();
                 rfm_time_init(true);
-
-                if (!g_bacnet_started) {
-                    /* get PPP IP address and set as BACNET interface */
-                    esp_netif_ip_info_t ip_info;
-                    if (g_ppp_netif && esp_netif_get_ip_info(g_ppp_netif, &ip_info) == ESP_OK 
-                        && ip_info.ip.addr != 0) {
-                        char ip_str[32];
-                        esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
-                        setenv("BACNET_IFACE", ip_str, 1);
-                        ESP_LOGI(TAG, "[BACNET] Interface set: %s", ip_str);
-                    }
-
-                    dlenv_init();
-                    atexit(datalink_cleanup);
-                    Send_I_Am(&Handler_Transmit_Buffer[0]);
-                    xTaskCreate(server_task, "bacnet_server", 8000, NULL, 1, NULL);
-                    xTaskCreate(ping_task,   "ping_task",     4096, NULL, 1, NULL);
-                    g_bacnet_started = true;
-                    ESP_LOGI(TAG, "[RECONNECT] BACnet + Ping started (first connection)");
-                } else {
-                    Send_I_Am(&Handler_Transmit_Buffer[0]);
-                }
-
+                Send_I_Am(&Handler_Transmit_Buffer[0]);
                 solar_invalidate_cache();
                 rfm_log_event(EVENT_NTP_SYNC, 0.0f, 0);
                 ESP_LOGI(TAG, "[RECONNECT] Connection established from offline state");
@@ -236,6 +234,7 @@ void modem_reconnect_task(void *pvParameters)
             } else {
                 ESP_LOGW(TAG, "[RECONNECT] Failed - next attempt in 2 minutes");
             }
+        }
         }
     }
 
@@ -249,7 +248,7 @@ void modem_reconnect_task(void *pvParameters)
 
         /* Lost connection - wait 2 minutes before retry */
         ESP_LOGW(TAG, "[RECONNECT] Connection lost - waiting 2 minutes before retry...");
-        vTaskDelay(pdMS_TO_TICKS(1800000));  /* 30 minutes */
+        vTaskDelay(pdMS_TO_TICKS(1800000));  /* 30 minutes */  
 
         if (!g_link_lost) continue;
 

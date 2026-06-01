@@ -1,9 +1,9 @@
-/**
- * Initialize WiFi and connect to SSID
- * 
- * @return true if WiFi connection succeeded, false otherwise
- */
+#pragma once
+
 #include <stdbool.h>
 
+extern bool g_connected;
+
 bool wifi_initialize(void);
-extern volatile bool g_connected;
+bool wifi_is_connected(void);
+void wifi_force_reconnect(void);

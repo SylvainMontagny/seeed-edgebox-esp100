@@ -7,6 +7,7 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_sntp.h"
+#include "esp_wifi.h"
 #include "esp_netif.h"
 #include "ping/ping_sock.h"
 #include "lwip/inet.h"
@@ -49,30 +50,53 @@
 static const char *TAG = "main";
 /* Reconnect task for the selected network interface */
 
-
-static void reconnect_task(void *pvParameters)
+bool g_connected = false;
+static void wifi_reconnect_task(void *pvParameters)
 {
-   
-    for (;;) {
-    if (!g_connected) 
+    for (;;)
     {
-        ESP_LOGI(TAG, "[RECONNECT] WiFi mode");
-        ESP_LOGW(TAG, "[RECONNECT] Waiting for WiFi connection...");
-        ntp_initialize();
-        rfm_time_init(true);
+        if (!wifi_is_connected())
+        {
+            ESP_LOGW(TAG,
+                     "[RECONNECT] WiFi disconnected");
 
-        /* Set BACnet interface using the current WiFi IP */
-        esp_netif_ip_info_t ip_info;
-        esp_netif_t *wifi_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-        if (wifi_netif && esp_netif_get_ip_info(wifi_netif, &ip_info) == ESP_OK
-            && ip_info.ip.addr != 0) {
-            char ip_str[32];
-            esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
-            setenv("BACNET_IFACE", ip_str, 1);
-            ESP_LOGI(TAG, "[BACNET] WiFi interface set: %s", ip_str);
+            wifi_force_reconnect();
+            
+            esp_netif_ip_info_t ip_info;
+            esp_netif_t *wifi_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+            if (wifi_netif && esp_netif_get_ip_info(wifi_netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0)
+            {
+                char ip_str[32];
+                esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
+                setenv("BACNET_IFACE", ip_str, 1);
+                ESP_LOGI(TAG, "[BACNET] WiFi interface set: %s", ip_str);
+            }
+            dlenv_init();
+            atexit(datalink_cleanup);
+            Send_I_Am(&Handler_Transmit_Buffer[0]);
         }
-    }
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        else
+        {
+            wifi_ap_record_t ap_info;
+
+            if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK)
+            {
+                if (ap_info.rssi < -80) {
+                    g_connected = false;
+                    ESP_LOGW(TAG, "[RECONNECT] RSSI=%d trying to reconnect", ap_info.rssi);
+                } 
+                else {
+                    ESP_LOGI(TAG, "[RECONNECT] WiFi connected with RSSI=%d", ap_info.rssi);
+                }   
+            }
+            else
+            {
+                ESP_LOGW(TAG,"[RECONNECT] Failed to get AP info, forcing reconnect");
+                g_connected = false;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
 
@@ -215,6 +239,7 @@ static bool network_initialize(void)
 {
 #ifdef CONFIG_NETWORK_CONNECTION_WIFI
     ESP_LOGI(TAG, "[NETWORK] WiFi initialisation...");
+    
     return wifi_initialize();
 #else
     ESP_LOGI(TAG, "[NETWORK] 4G/LTE initialisation...");
@@ -317,14 +342,15 @@ void app_main(void)
         ESP_LOGI(TAG, "=== ONLINE: BACnet + Schedule active ===");
     } else {
         ESP_LOGW(TAG, "=== OFFLINE: Schedule active, BACnet inactive ===");
-        ESP_LOGW(TAG, "=== reconnect_task will retry every 2 minutes ===");
+        ESP_LOGW(TAG, "=== wifi_reconnect_task will retry every 2 minutes ===");
     }
     xTaskCreate(schedule_task, "schedule_task", 4096, NULL, 1, NULL);
 
 #ifdef CONFIG_NETWORK_CONNECTION_4G
-    xTaskCreate(modem_reconnect_task, "reconnect_task", 4096, NULL, 1, NULL);
+    xTaskCreate(modem_check_task, "modem_check", 4096, NULL, 1, NULL);
+    xTaskCreate(modem_reconnect_task, "modem_reconnect_task", 4096, NULL, 1, NULL);
 #else
-    xTaskCreate(reconnect_task, "reconnect_task", 4096, NULL, 1, NULL);
+    xTaskCreate(wifi_reconnect_task, "wifi_reconnect_task", 4096, NULL, 1, NULL);
 #endif
 
     ESP_LOGI(TAG, "AV0 -> GPIO42 | AV1 -> GPIO41");

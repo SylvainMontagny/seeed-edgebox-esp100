@@ -12,7 +12,7 @@
 #define MODEM_RX_PIN   47
 #define MODEM_PWR_KEY  21
 #define MODEM_PWR_EN   16
-extern volatile bool g_connected;
+extern  bool g_connected;
 extern volatile bool g_bacnet_started;
 extern esp_netif_t *g_ppp_netif;
 extern esp_modem_dce_t *g_ppp_dce;
@@ -25,7 +25,8 @@ extern esp_ping_handle_t g_ping_handle;
 bool modem_initialize(void);
 bool modem_try_once(void);
 void schedule_update_solar_times(void);
-void modem_reconnect_task(void *pvParameters);
 void modem_start_ping_task(void);
+void modem_reconnect_task(void *pvParameters);
+void modem_check_task(void *pvParameters);
 
 #endif // MODEM_H
