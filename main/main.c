@@ -49,7 +49,7 @@
 #include "gpiooutputs.h"
 static const char *TAG = "main";
 /* Reconnect task for the selected network interface */
-
+extern bool server_task_initialized;
 bool g_connected = false;
 static void wifi_reconnect_task(void *pvParameters)
 {
@@ -66,6 +66,10 @@ static void wifi_reconnect_task(void *pvParameters)
         esp_netif_t *wifi_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
             if (wifi_netif && esp_netif_get_ip_info(wifi_netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0)
             {
+                if (!server_task_initialized) {
+                    xTaskCreate(server_task, "bacnet_server", 8000, NULL, 1, NULL);
+                    server_task_initialized = true;
+                }
                 char ip_str[32];
                 esp_ip4addr_ntoa(&ip_info.ip, ip_str, sizeof(ip_str));
                 setenv("BACNET_IFACE", ip_str, 1);
@@ -148,7 +152,6 @@ static void schedule_task(void *pvParameters)
     }
 
     for (;;) {
-        ESP_LOGI(TAG,"av1 = %f", Analog_Value_Present_Value(1));
         now = time(NULL);
         t   = localtime(&now);
 
@@ -179,7 +182,8 @@ static void schedule_task(void *pvParameters)
                 }
                 /* Zone A control */
                 {
-                    float target0;
+                     float target0;
+
                     if (!is_night) {
                         target0 = 0.0f;
                     } else if (desc0) {
@@ -187,16 +191,15 @@ static void schedule_task(void *pvParameters)
                     } else {
                         target0 = 0.0f;
                     }
-
+                    av_pwm_apply(1,(uint32_t) Analog_Value_Present_Value(0));
                     if (target0 != g_prev_pv0) {
                         float before0 = Analog_Value_Present_Value(0);
                         http_trendlog_record(0, before0);
                         TL_fetch_property(0);
                         Analog_Value_Present_Value_Set(0, target0, 16);
-                        av_pwm_apply(0, (uint32_t)Analog_Value_Present_Value(0));
-                        ESP_LOGI(TAG, "[SOLAR] Zone A -> %.1f%%", target0);
-                        http_trendlog_record(0, target0);;
-                        rfm_save_av_state(target0, Analog_Value_Present_Value(1));
+						ESP_LOGI(TAG, "[SOLAR] Zone A -> %.1f%%", target0);
+                        http_trendlog_record(0, target0);
+                        rfm_save_av_state(target0, Analog_Value_Present_Value(0));
                         g_prev_pv0 = target0;
                     }
                 }
@@ -333,8 +336,9 @@ void app_main(void)
         
         dlenv_init();
         atexit(datalink_cleanup);
-        Send_I_Am(&Handler_Transmit_Buffer[0]);
+
         xTaskCreate(server_task, "bacnet_server", 8000, NULL, 1, NULL);
+                Send_I_Am(&Handler_Transmit_Buffer[0]);
         
 #ifdef CONFIG_NETWORK_CONNECTION_4G
         modem_start_ping_task();

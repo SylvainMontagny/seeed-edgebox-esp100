@@ -51,7 +51,7 @@
 
 
 static const char *TAG = "server";
-
+bool server_task_initialized = false;
 void Setup_Default_Weekly_Schedule(void);
 
 /* Buffer used for receiving */
@@ -59,6 +59,7 @@ static uint8_t rx_buffer[MAX_MPDU];
 object_functions_t added_object;
 void server_task(void *arg)
 {
+    server_task_initialized = true;
     /* Source address of incoming packet */
     BACNET_ADDRESS src = { 0 };
 
