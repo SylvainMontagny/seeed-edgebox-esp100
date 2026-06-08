@@ -152,14 +152,14 @@ static void schedule_task(void *pvParameters)
     }
 
     for (;;) {
-        now = time(NULL);
-        t   = localtime(&now);
+        BACNET_DATE_TIME currentDateTime;
+        Device_getCurrentDateTime(&currentDateTime);
 
-        btime.hour       = (uint8_t)t->tm_hour;
-        btime.min        = (uint8_t)t->tm_min;
-        btime.sec        = (uint8_t)t->tm_sec;
-        btime.hundredths = 0;
-        uint8_t bacnet_wday = (t->tm_wday == 0) ? 7 : (uint8_t)t->tm_wday;
+        btime.hour       = currentDateTime.time.hour;
+        btime.min        = currentDateTime.time.min;
+        btime.sec        = currentDateTime.time.sec;
+        btime.hundredths = currentDateTime.time.hundredths;
+        uint8_t bacnet_wday = currentDateTime.date.wday;
 
         desc0 = Schedule_Object(0);
         desc1 = Schedule_Object(1);

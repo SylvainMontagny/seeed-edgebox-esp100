@@ -2,6 +2,7 @@
 #include "fram_layout.h"
 #include "fram_fm24cl64b.h"
 #include "esp_log.h"
+#include "device.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -271,12 +272,22 @@ bool solar_get_local_time(float latitude, float longitude, struct tm *out)
         return false;
     }
 
-    time_t now = time(NULL);
-    struct tm *local = localtime(&now);
-    if (!local) {
-        return false;
+    BACNET_DATE_TIME currentDateTime;
+    Device_getCurrentDateTime(&currentDateTime);
+
+    memset(out, 0, sizeof(*out));
+    if (currentDateTime.date.year > 1900) {
+        out->tm_year = (int)currentDateTime.date.year - 1900;
+    } else {
+        out->tm_year = (int)currentDateTime.date.year;
     }
-    *out = *local;
+    out->tm_mon  = (int)currentDateTime.date.month - 1;
+    out->tm_mday = (int)currentDateTime.date.day;
+    out->tm_hour = (int)currentDateTime.time.hour;
+    out->tm_min  = (int)currentDateTime.time.min;
+    out->tm_sec  = (int)currentDateTime.time.sec;
+    out->tm_wday = (currentDateTime.date.wday == 7) ? 0 : (int)currentDateTime.date.wday;
+    out->tm_isdst = -1;
     return true;
 }
 

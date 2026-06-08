@@ -500,6 +500,8 @@ static char Description[MAX_DEV_DESC_LEN + 1] = "server";
 /* Active_VT_Sessions */
 static BACNET_TIME Local_Time;  /* rely on OS, if there is one */
 static BACNET_DATE Local_Date;  /* rely on OS, if there is one */
+static bool Local_Time_Overridden = false;
+static bool Local_Date_Overridden = false;
 /* NOTE: BACnet UTC Offset is inverse of common practice.
    If your UTC offset is -5hours of GMT,
    then BACnet UTC offset is +5hours.
@@ -1026,17 +1028,22 @@ int    tm_isdst Daylight Savings flag.
     }
 #endif
 
+    /* When overridden by a remote write, do not clobber the manual value */
     if (tblock) {
-        datetime_set_date(&Local_Date, (uint16_t) tblock->tm_year + 1900,
-            (uint8_t) tblock->tm_mon + 1, (uint8_t) tblock->tm_mday);
+        if (!Local_Date_Overridden) {
+            datetime_set_date(&Local_Date, (uint16_t) tblock->tm_year + 1900,
+                (uint8_t) tblock->tm_mon + 1, (uint8_t) tblock->tm_mday);
+        }
+    if (!Local_Time_Overridden) {
 #if !defined(_MSC_VER)
         datetime_set_time(&Local_Time, (uint8_t) tblock->tm_hour,
-            (uint8_t) tblock->tm_min, (uint8_t) tblock->tm_sec,
-            (uint8_t) (tv.tv_usec / 10000));
+        (uint8_t) tblock->tm_min, (uint8_t) tblock->tm_sec,
+        (uint8_t) (tv.tv_usec / 10000));
 #else
         datetime_set_time(&Local_Time, (uint8_t) tblock->tm_hour,
-            (uint8_t) tblock->tm_min, (uint8_t) tblock->tm_sec, 0);
+        (uint8_t) tblock->tm_min, (uint8_t) tblock->tm_sec, 0);
 #endif
+    }
         if (tblock->tm_isdst) {
             Daylight_Savings_Status = true;
         } else {
@@ -1045,8 +1052,12 @@ int    tm_isdst Daylight Savings flag.
         /* note: timezone is declared in <time.h> stdlib. */
         UTC_Offset = timezone / 60;
     } else {
-        datetime_date_wildcard_set(&Local_Date);
-        datetime_time_wildcard_set(&Local_Time);
+        if (!Local_Date_Overridden) {
+            datetime_date_wildcard_set(&Local_Date);
+        }
+        if (!Local_Time_Overridden) {
+            datetime_time_wildcard_set(&Local_Time);
+        }
         Daylight_Savings_Status = false;
     }
 }
@@ -1518,13 +1529,20 @@ bool Device_Write_Property_Local(
             }
             break;
 #endif
+        case PROP_LOCAL_TIME:
+            status = WPValidateArgType(&value, BACNET_APPLICATION_TAG_TIME,
+                &wp_data->error_class, &wp_data->error_code);
+            if (status) {
+                Local_Time = value.type.Time;
+                Local_Time_Overridden = true;
+                Device_Inc_Database_Revision();
+            }
+            break;
         case PROP_OBJECT_TYPE:
         case PROP_VENDOR_NAME:
         case PROP_FIRMWARE_REVISION:
         case PROP_APPLICATION_SOFTWARE_VERSION:
-        case PROP_LOCAL_TIME:
         case PROP_UTC_OFFSET:
-        case PROP_LOCAL_DATE:
         case PROP_DAYLIGHT_SAVINGS_STATUS:
         case PROP_PROTOCOL_VERSION:
         case PROP_PROTOCOL_REVISION:
@@ -1538,6 +1556,15 @@ bool Device_Write_Property_Local(
         case PROP_ACTIVE_COV_SUBSCRIPTIONS:
             wp_data->error_class = ERROR_CLASS_PROPERTY;
             wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            break;
+        case PROP_LOCAL_DATE:
+            status = WPValidateArgType(&value, BACNET_APPLICATION_TAG_DATE,
+                &wp_data->error_class, &wp_data->error_code);
+            if (status) {
+                Local_Date = value.type.Date;
+                Local_Date_Overridden = true;
+                Device_Inc_Database_Revision();
+            }
             break;
         default:
             wp_data->error_class = ERROR_CLASS_PROPERTY;

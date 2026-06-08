@@ -506,8 +506,19 @@ void Schedule_Recalculate_PV(
     bool se_found  = false;
     BACNET_TIME se_best_t = {0, 0, 0, 0};
     BACNET_APPLICATION_DATA_VALUE old_value = desc->Present_Value;
-    time_t now_t = time(NULL);
-    struct tm *t = localtime(&now_t);
+    BACNET_DATE_TIME currentDateTime;
+    struct tm t;
+
+    Device_getCurrentDateTime(&currentDateTime);
+    memset(&t, 0, sizeof(t));
+    if (currentDateTime.date.year > 1900) {
+        t.tm_year = (int)currentDateTime.date.year - 1900;
+    } else {
+        t.tm_year = (int)currentDateTime.date.year;
+    }
+    t.tm_mon  = (int)currentDateTime.date.month - 1;
+    t.tm_mday = (int)currentDateTime.date.day;
+    t.tm_wday = (currentDateTime.date.wday == 7) ? 0 : (int)currentDateTime.date.wday;
 
     if (!desc || desc->Out_Of_Service) return;
 
@@ -520,7 +531,7 @@ void Schedule_Recalculate_PV(
             bool date_match = false;
 
             if (se->periodTag == BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY) {
-                date_match = calendar_entry_matches(&se->period.calendarEntry, t);
+                date_match = calendar_entry_matches(&se->period.calendarEntry, &t);
             }
 
             if (!date_match) continue;
